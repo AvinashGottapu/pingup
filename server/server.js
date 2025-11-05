@@ -4,6 +4,7 @@ import 'dotenv/config'
 import connectDB from './configs/db.js'
 import mongoose from 'mongoose'
 import { inngest, functions } from "./inngest/index.js"
+import { serve } from 'inngest/express'
 
 
 const PORT = process.env.PORT || 4000;
