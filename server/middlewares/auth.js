@@ -1,6 +1,6 @@
 import { err } from "inngest/types";
 
-export const protect = async (req,res,next) => { 
+const protect = async (req,res,next) => { 
      try {
         const { userId } = await req.auth();
         
@@ -12,3 +12,5 @@ export const protect = async (req,res,next) => {
            res.json({success:false,message: error.message })   
      }
 }
+
+export default protect
