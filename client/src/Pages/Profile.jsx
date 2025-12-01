@@ -7,14 +7,27 @@ import PostCard from "../components/PostCard";
 import moment from 'moment'
 import ProfileModal from "../components/ProfileModal";
 
-const Profile = () => {
+
+
+
+const Profile = () => { 
   const { profileId } = useParams();
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [activeTab, setActiveTab] = useState("posts");
   const [showEdit, setShowEdit] = useState(false);
 
-  const fetchUser = async () => {
+  const fetchUser = async (profileId) => { 
+    const token = await getToken()
+
+    try {
+         const { data } = await api.post(`/api/User/profiles`,{profileId},{ 
+           headers : { Authorization : `Bearer${token}` }
+         })
+    } catch (error) {
+      
+    }
+
     setUser(dummyUserData);
     setPosts(dummyPostsData);
   };

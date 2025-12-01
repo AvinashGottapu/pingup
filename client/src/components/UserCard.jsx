@@ -1,9 +1,9 @@
-import React from "react";
+import React, { use } from "react";
 import { dummyUserData } from "../assets/assets";
 import { MapPin, MessageSquare, Plus, UserPlus,MessageCircle } from "lucide-react";
 
+
 const UserCard = ({ user }) => {
-  const currentUser = dummyUserData;
 
   const handleFollow = async () => {};
 

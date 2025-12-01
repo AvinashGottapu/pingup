@@ -20,7 +20,7 @@ const App = () => {
 
       useEffect(() => { 
         if(user) { 
-          getoken().then((token) => console.log(token))
+           
         }
        },[])
 
