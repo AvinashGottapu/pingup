@@ -6,7 +6,7 @@ import Messages from "./Pages/Messages";
 import ChatBox from "./Pages/ChatBox";
 import Connections from "./Pages/Connections";
 import Discover from "./Pages/Discover";
-import Profile from "./pages/Profile";
+import Profile from "./Pages/Profile";
 import CreatePost from "./Pages/CreatePost";
 import Layout from "./Pages/Layout";
 import { useUser, useAuth } from "@clerk/clerk-react";
