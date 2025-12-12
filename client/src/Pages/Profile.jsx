@@ -4,38 +4,58 @@ import { dummyPostsData, dummyUserData } from "../assets/assets";
 import Loading from "../components/Loading";
 import UserProfileInfo from "../components/UserProfileInfo";
 import PostCard from "../components/PostCard";
-import moment from 'moment'
+import moment from "moment";
 import ProfileModal from "../components/ProfileModal";
+import { useAuth } from "@clerk/clerk-react";
+import { useSelector } from "react-redux";
+import { toast } from "react-hot-toast";
+import api from "../api/axios";
 
+const Profile = () => {
+  const currentUser = useSelector((state) => state.user.value);
 
-
-
-const Profile = () => { 
   const { profileId } = useParams();
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [activeTab, setActiveTab] = useState("posts");
   const [showEdit, setShowEdit] = useState(false);
 
-  const fetchUser = async (profileId) => { 
-    const token = await getToken()
+  const { getToken } = useAuth();
 
+  const fetchUser = async (profileId) => {
     try {
-         const { data } = await api.post(`/api/User/profiles`,{profileId},{ 
-           headers : { Authorization : `Bearer${token}` }
-         })
+      const token = await getToken();
+
+      const { data } = await api.post(
+        `/api/user/profiles`,
+        { profileId },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (data.success) {
+        setUser(data.profile);
+        setPosts(data.posts);
+      } else {
+        toast.error(data.message);
+      }
     } catch (error) {
-      
+      toast.error(error.message);
     }
-
-    setUser(dummyUserData);
-    setPosts(dummyPostsData);
   };
-  useEffect(() => {
-    fetchUser();
-  }, []);
 
-  return user ? ( 
+  useEffect(() => {
+    if (!currentUser) return;
+
+    if (profileId) {
+      fetchUser(profileId);
+    } else {
+      fetchUser(currentUser._id);
+    }
+  }, [profileId, currentUser]);
+
+  return user ? (
     <div className="relative h-full overflow-y-scroll bg-gray-50 p-6">
       <div className="max-w-3xl mx-auto">
         {/* Profile Card */}
@@ -85,32 +105,38 @@ const Profile = () => {
           )}
           {/* Media */}
           {activeTab === "media" && (
-            <div className="flex flex-wrap mt-6 max-w-6xl">
+            <div className="mt-6 max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-3 gap-4">
               {posts
                 .filter((post) => post.image_urls.length > 0)
-                .map((post) => (
-                  <>
-                    {post.image_urls.map((image, index) => (
-                      <Link target='_blank' to={image} key={index} className='relative group'>
+                .map((post) =>
+                  post.image_urls.map((image, index) => (
+                    <Link
+                      target="_blank"
+                      to={image}
+                      key={`${post._id}-${index}`}
+                      className="relative group"
+                    >
+                      <div className="w-full aspect-square bg-gray-100 border border-gray-200 rounded-xl overflow-hidden flex items-center justify-center">
                         <img
                           src={image}
-                          key={index}
-                          className="w-64 aspect-video object-cover"
                           alt=""
+                          className="w-full h-full object-contain"
                         />
-                        <p className="absolute bottom-0 right-0 text-xs p-1 px-3 backdrop-blur-xl text-white opacity-0 group-hover:opacity-100 transition duration-300">
-                          Posted {moment(post.createdAt).fromNow()}{" "}
-                        </p>
-                      </Link>
-                    ))}
-                  </>
-                ))}
+                      </div>
+
+                      <p
+                        className="absolute bottom-0 right-0 text-xs p-1 px-3 bg-black/70 text-white opacity-0 group-hover:opacity-100 transition duration-300"
+                      >
+                        Posted {moment(post.createdAt).fromNow()}
+                      </p>
+                    </Link>
+                  ))
+                )}
             </div>
           )}
         </div>
-      </div> 
-            { showEdit && <ProfileModal setShowEdit={setShowEdit}/> }
-
+      </div>
+      {showEdit && <ProfileModal setShowEdit={setShowEdit} />}
     </div>
   ) : (
     <Loading />

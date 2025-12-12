@@ -2,33 +2,35 @@ import fs from "fs"
 import imagekit from "../configs/imageKit.js";
 import Message from "../models/Message.js";
 
-// Create an empty object to store Server sent Event connections..
-const connections = { }; 
+let connections = {}
 
-// Controller function for the SSE endpoint..
-export const sseController = (req,res) => { 
-    const { userId } = req.params
-    console.log('New client connected : ',userId) 
+export const sseController = (req, res) => {
+  const { userId } = req.params;
+  console.log('New client connected:', userId);
 
-    // Set SSE headers..
-    res.setHeader('Content-Type','text/event-stream')
-    res.setHeader('Cache-Control','no-cache')
-    res.setHeader('Connection','keep-alive')
-    res.setHeader('Access-Control-Allow-Origin','*')
+  // Required headers
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
-    // Add the Clients response object to the connections object...
-    connections[userId] = res
+  // Flush headers (important!)
+  if (res.flushHeaders) res.flushHeaders();
 
-    // Send an intial event to the client...
-    res.write('log: Connected to SSE stream\n\n')
+  // Add connection for the user
+  connections[userId] = res;
 
-    // Handle Client disconnection.. 
-    req.on('close', () => { 
-        // Remove the client's response object from the connections array..
-        delete connections[userId];
-        console.log('Client disconnected')
-     })
-}
+  // Send initial SSE event properly formatted
+  res.write(`event: log\n`);
+  res.write(`data: "Connected to SSE stream"\n\n`);
+
+  // Remove connection on disconnect
+  req.on("close", () => {
+    delete connections[userId];
+    console.log("Client disconnected:", userId);
+  });
+};
+
 
 // Send Message..
 export const sendMessage = async (req,res) => { 
@@ -42,9 +44,9 @@ export const sendMessage = async (req,res) => {
 
         if(message_type==='image') {  
             const fileBuffer = fs.readFileSync(image.path) 
-            const response = imagekit.upload({ 
+            const response = await imagekit.upload({ 
                 file : fileBuffer,
-                fileName : image.originalName,
+                fileName : image.originalname,
             });
              
             media_url = imagekit.url({ 
@@ -65,18 +67,18 @@ export const sendMessage = async (req,res) => {
              media_url
         }) 
 
-        res.json({ success : true,messasge }) 
+        res.json({ success : true,message }) 
 
         // Send message to to_user_id using SSE.. 
-        const messageWithUserData = await Message.findById(message._id).populate('from_user_id')
+         const messageWithUserData = await Message.findById(message._id).populate('from_user_id')
 
         if(connections[to_user_id]) { 
-            connections[to_user_id].write(`data : ${JSON.stringify(messageWithUserData)}\n\n`)
+            connections[to_user_id].write(`data: ${JSON.stringify(messageWithUserData)}\n\n`)
         }
         
     } catch (error) {
         console.log(error);
-        res.json({success : false, messasge : error.messasge})
+        res.json({success : false, messasge : error.message})
     }
 }
 
@@ -109,7 +111,7 @@ export const getUserRecentMessages = async (req,res) => {
      try { // Show all messages I received from any person
          
         const { userId } = req.auth()
-        const messages = (await Message.find({ to_user_id : userId }.populate('from_user_id to_user_id'))).sort({createdAt : -1})
+        const messages = await Message.find({ to_user_id : userId }).populate('from_user_id to_user_id').sort({createdAt : -1})
 
         res.json({ success : true, messages })
         

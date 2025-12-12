@@ -3,15 +3,18 @@ import Connection from "../models/Connections.js";
 import User from "../models/User.js"
 import Post from "../models/Post.js"
 import fs from 'fs'
+import { inngest } from "../inngest/index.js";
+
 
 // Get user data using userId
 export const getUserData = async (req,res) => { 
       try { 
            const { userId } = req.auth(); 
            
-           const user = User.findById(userId);
+           const user = await User.findById(userId);
 
            if(!user)  { 
+               
                return res.json({success : false,message : "User not found."})
            } 
            res.json({success : true, user})
@@ -29,12 +32,12 @@ export const updateUserData = async (req,res) => {
           let { username,bio,location,full_name } = req.body;  
           // CONST IS NOT USED BECAUSE WE ARE CHANGING THE USERNAME VALUE BELOW..
 
-          const tempUser = await User.findbyId(userId); 
+          const tempUser = await User.findById(userId); 
 
           !username && (username = tempUser.username) 
 
           if(username!==tempUser.username) { 
-              const user = await User.findone({username})
+              const user = await User.findOne({username})
               if(user) { 
                 // WE WILL NOT CHANGE THE USERNAME IF IT ALREADY EXISTS.
                 if(user) { 
@@ -223,7 +226,7 @@ export const sendConnectionRequest = async (req,res) => {
 export const getUserConnections = async (req,res) => { 
       try {
          const { userId } = req.auth()
-         const user = await User.findbyId(userId).populate('connections followers following')
+         const user = await User.findById(userId).populate('connections followers following')
 
          const connections = user.connections
          const followers = user.followers
@@ -253,7 +256,7 @@ export const acceptConnectionRequest = async (req,res) => {
          user.connections.push(id) 
          await user.save()
 
-         const touser = await User.findById(Id);
+         const touser = await User.findById(id);
          touser.connections.push(userId) 
          await touser.save() 
 
@@ -274,7 +277,7 @@ export const getUserProfiles = async (req,res) => {
          const { profileId } = req.body; 
          const profile = await User.findById(profileId)
 
-         if(!profileId) { 
+         if(!profile) { 
             return res.json({ success : false, message : "profile not found"})
          } 
           const posts = await Post.find({user : profileId}).populate('user')

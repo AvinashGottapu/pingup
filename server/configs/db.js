@@ -6,7 +6,7 @@ const ConnectDB = async () => {
          await mongoose.connect(`${process.env.MONGODB_URL}/PingUp-Real-Real`, { 
          })
     } catch (error) {
-         console.log(error.message)
+         console.log(error.message); 
     }
 } 
 

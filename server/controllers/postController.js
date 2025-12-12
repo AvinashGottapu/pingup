@@ -55,12 +55,14 @@ export const getFeedPosts = async (req,res) => {
 
            // User connections and followings.. 
            const userIds = [userId, ...user.connections, ...user.following]
-           const posts = (await Post.find({user : {$in : userIds}}).populate('user')).sort({createdAt : -1}); 
-        
-           res.json({ success : true, posts}); 
+           const posts = await Post.find({user : {$in : userIds}}).populate('user').sort({createdAt : -1}); 
+           
+           res.json({ success : true, posts});  
+           
 
      } catch (error) {
-        
+              console.log(error);
+              res.json({success : false, message : error.message}); 
      }
 }
 

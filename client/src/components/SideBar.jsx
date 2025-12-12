@@ -4,16 +4,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import MenuItems from './MenuItems';
 import { CirclePlus, LogOut } from 'lucide-react';
 import { UserButton,useClerk } from '@clerk/clerk-react'
+import { useSelector } from 'react-redux';
 
 const SideBar = ({sidebarOpen,setSidebarOpen}) => { 
       
     const navigate = useNavigate();
-    const user = dummyUserData;
+    const user = useSelector((state) => state.user.value)   // dummyUserData;
     const { signOut } = useClerk();
 
   return (
-    <div className={`w-60 xl:w-72 bg-white border-r border-gray-200 flex flex-col justify-between items-center max-sm:absoulte top-0 bottom-0 z-20 ${sidebarOpen ? 'translate-x-0' : 'max-sm:-translate-x-full' } 
-      transition-all duration-300 ease-in-out `}>
+    <div className={`w-60 xl:w-72 bg-white border-r border-gray-200 flex flex-col justify-between items-center fixed left-0 top-0 bottom-0 z-30 ${sidebarOpen ? 'translate-x-0' : 'max-sm:-translate-x-full' } 
+      transition-all duration-300 ease-in-out`}>
        
        <div className='w-full'> 
          <img src={assets.logo} onClick={() => navigate('/') } className='w-26 ml-7 my-2 cursor-pointer' alt="" />

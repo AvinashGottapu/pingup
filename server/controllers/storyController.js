@@ -7,7 +7,7 @@ import { inngest } from "../inngest/index.js"
 
 // Add User Story..
 
-export const addUserStory = async (res,req) => { 
+export const addUserStory = async (req,res) => { 
         try {
              const { userId } = req.auth()
              const { content, media_type, background_color } = req.body
@@ -18,7 +18,7 @@ export const addUserStory = async (res,req) => {
                  const fileBuffer = fs.readFileSync(media.path);
                  const response = await imagekit.upload({ 
                     file : fileBuffer,
-                    fileName : media.orginalName,
+                    fileName : media.originalname 
                  }) 
                   media_url = response.url;
              } 
@@ -36,7 +36,7 @@ export const addUserStory = async (res,req) => {
                data : { storyId : story._id }
             })
 
-             res.json({success : true, })
+             res.json({success : true})
 
 
         } catch (error) {
@@ -47,7 +47,7 @@ export const addUserStory = async (res,req) => {
 
 // Get user tories.. 
 
-export const getStories = async (res,req) => { 
+export const getStories = async (req,res) => { 
         try {
              const { userId } = req.auth();
              const user = await User.findById(userId);
@@ -55,11 +55,9 @@ export const getStories = async (res,req) => {
              // User connections and followings..
              const userIds = [userId,...user.connections,...user.following]
              
-             const stories = await Story.find({ 
-                user : { $in : userIds }
-             }).populate('user').sort({createdAt : -1}); 
+             const stories = await Story.find({ user : { $in : userIds } }).populate('user').sort({createdAt : -1}); 
              
-             res.json({ success : true, Stories});
+             res.json({ success : true, stories});
 
         } catch (error) {
             console.log(error)

@@ -20,7 +20,7 @@ const syncUserCreation = inngest.createFunction(
         const user = await User.findOne({username}) 
         if(user) { 
             username = username + Math.floor(Math.random * 10000)
-        } 
+        }  
         const userData = { 
             _id : id,
             email : email_addresses[0].email_address,
