@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, UserPlus, UserCheck, UserRoundPen, MessageSquare, Settings } from "lucide-react";
+import { Users, UserPlus, UserCheck, UserRoundPen, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from 'react-redux'
 import { useAuth } from '@clerk/clerk-react'
@@ -67,21 +67,15 @@ const Connections = () => {
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto p-6">
         {/* Title  */}
-        <div className="mb-8 flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Connections
-            </h1>
-            <p className="text-slate-600">
-              Manage your network and discover new connections
-            </p>
-          </div>
-          <button
-            className="p-2 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 active:scale-95 transition shadow-sm"
-            aria-label="Settings"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            {" "}
+            Connections{" "}
+          </h1>
+          <p className="text-slate-600">
+            {" "}
+            Manage your network and discover new connections{" "}
+          </p>
         </div>
 
         {/* Counts */}
