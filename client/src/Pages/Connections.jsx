@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, UserPlus, UserCheck, UserRoundPen, MessageSquare } from "lucide-react";
+import { Users, UserPlus, UserCheck, UserRoundPen, MessageSquare, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from 'react-redux'
 import { useAuth } from '@clerk/clerk-react'
@@ -67,23 +67,29 @@ const Connections = () => {
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto p-6">
         {/* Title  */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            {" "}
-            Connections{" "}
-          </h1>
-          <p className="text-slate-600">
-            {" "}
-            Manage your network and discover new connections{" "}
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              Connections
+            </h1>
+            <p className="text-slate-600">
+              Manage your network and discover new connections
+            </p>
+          </div>
+          <button
+            className="p-2 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 active:scale-95 transition shadow-sm"
+            aria-label="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Counts */}
-        <div className="mb-8 flex flex-wrap gap-6">
+        <div className="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
           {dataArray.map((item, index) => (
             <div
               key={index}
-              className="flex flex-col items-center justify-center gap-1 border h-20 w-40 border-gray-200 bg-white shadow rounded-md"
+              className="flex flex-col items-center justify-center gap-1 border h-20 w-full border-gray-200 bg-white shadow rounded-md"
             >
               <b> {item.value.length} </b>
               <p className="tetx-slate-600"> {item.label} </p>
@@ -92,12 +98,12 @@ const Connections = () => {
         </div>
 
         {/* Tabs */}
-        <div className="inline-flex flex-wrap items-center border border-gray-200 rounded-md p-1 bg-white shadow-sm">
+        <div className="grid grid-cols-2 gap-2 sm:inline-flex sm:flex-wrap sm:items-center border border-gray-200 rounded-md p-1 bg-white shadow-sm">
           {dataArray.map((tab) => (
             <button
               onClick={() => setCurrentTab(tab.label)}
               key={tab.label}
-              className={`flex items-center px-3 py-1 text-sm rounded-md transition-colors ${
+              className={`flex items-center justify-center sm:justify-start px-3 py-1 text-sm rounded-md transition-colors ${
                 currentTab === tab.label
                   ? "bg-white font-medium text-black"
                   : "text-gray-500 hover:text-black"
