@@ -81,7 +81,7 @@ const Profile = () => {
         {/* Tabs */}
         <div className="mt-6">
           <div className="bg-white rounded-xl shadow p-1 flex max-w-md mx-auto">
-            {["posts", "media", "likes"].map((tab) => (
+            {["posts", "media"].map((tab) => (
               <button
                 onClick={() => setActiveTab(tab)}
                 key={tab}
@@ -122,7 +122,7 @@ const Profile = () => {
                           alt=""
                           className="w-full h-full object-contain"
                         />
-                      </div>
+                      </div> 
 
                       <p
                         className="absolute bottom-0 right-0 text-xs p-1 px-3 bg-black/70 text-white opacity-0 group-hover:opacity-100 transition duration-300"
@@ -133,7 +133,8 @@ const Profile = () => {
                   ))
                 )}
             </div>
-          )}
+          )} 
+
         </div>
       </div>
       {showEdit && <ProfileModal setShowEdit={setShowEdit} />}
