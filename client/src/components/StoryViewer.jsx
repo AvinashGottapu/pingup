@@ -100,7 +100,7 @@ const StoryViewer = ({ viewStory, setViewStory, fetchStories }) => {
       if (duration < 500) {
          if (action === 'next') handleNext();
          if (action === 'prev') handlePrev();
-      }  
+      }
    };
 
 
@@ -226,7 +226,10 @@ const StoryViewer = ({ viewStory, setViewStory, fetchStories }) => {
             onMouseUp={() => handleHoldEnd('prev')}
             onMouseLeave={() => setIsPaused(false)}
             onTouchStart={handleHoldStart}
-            onTouchEnd={() => handleHoldEnd('prev')}
+            onTouchEnd={(e) => {
+               e.preventDefault();
+               handleHoldEnd('prev');
+            }}
          ></div>
 
          <div
@@ -235,7 +238,10 @@ const StoryViewer = ({ viewStory, setViewStory, fetchStories }) => {
             onMouseUp={() => handleHoldEnd('next')}
             onMouseLeave={() => setIsPaused(false)}
             onTouchStart={handleHoldStart}
-            onTouchEnd={() => handleHoldEnd('next')}
+            onTouchEnd={(e) => {
+               e.preventDefault();
+               handleHoldEnd('next');
+            }}
          ></div>
 
          {/* Content Wrapper */}

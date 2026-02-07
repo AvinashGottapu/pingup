@@ -24,7 +24,7 @@ const Connections = () => {
   ];
 
 
-   const handleUnfollow = async (userId) => {
+  const handleUnfollow = async (userId) => {
     try {
       const token = await getToken();
       const { data } = await api.post("/api/user/unfollow", { id: userId },
@@ -45,7 +45,7 @@ const Connections = () => {
   const acceptConnection = async (userId) => {
     try {
       const token = await getToken();
-      const { data } = await api.post( "/api/user/accept", { id: userId },
+      const { data } = await api.post("/api/user/accept", { id: userId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -61,18 +61,18 @@ const Connections = () => {
   };
 
 
-   useEffect(() => { getToken().then((token) => { dispatch(fetchConnections(token)) } ) },[])
+  useEffect(() => { getToken().then((token) => { dispatch(fetchConnections(token)) }) }, [])
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <div className="max-w-6xl mx-auto p-6">
         {/* Title  */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
             {" "}
             Connections{" "}
           </h1>
-          <p className="text-slate-600">
+          <p className="text-slate-600 dark:text-slate-400">
             {" "}
             Manage your network and discover new connections{" "}
           </p>
@@ -83,30 +83,29 @@ const Connections = () => {
           {dataArray.map((item, index) => (
             <div
               key={index}
-              className="flex flex-col items-center justify-center gap-1 border h-20 w-full border-gray-200 bg-white shadow rounded-md"
+              className="flex flex-col items-center justify-center gap-1 border h-20 w-full border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow rounded-md"
             >
-              <b> {item.value.length} </b>
-              <p className="tetx-slate-600"> {item.label} </p>
+              <b className="dark:text-white"> {item.value.length} </b>
+              <p className="tetx-slate-600 dark:text-slate-400"> {item.label} </p>
             </div>
           ))}
         </div>
 
         {/* Tabs */}
-        <div className="grid grid-cols-2 gap-2 sm:inline-flex sm:flex-wrap sm:items-center border border-gray-200 rounded-md p-1 bg-white shadow-sm">
+        <div className="grid grid-cols-2 gap-2 sm:inline-flex sm:flex-wrap sm:items-center border border-gray-200 dark:border-slate-800 rounded-md p-1 bg-white dark:bg-slate-900 shadow-sm">
           {dataArray.map((tab) => (
             <button
               onClick={() => setCurrentTab(tab.label)}
               key={tab.label}
-              className={`flex items-center justify-center sm:justify-start px-3 py-1 text-sm rounded-md transition-colors ${
-                currentTab === tab.label
-                  ? "bg-white font-medium text-black"
-                  : "text-gray-500 hover:text-black"
-              } cursor-pointer`}
+              className={`flex items-center justify-center sm:justify-start px-3 py-1 text-sm rounded-md transition-colors ${currentTab === tab.label
+                  ? "bg-white dark:bg-slate-800 font-medium text-black dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white"
+                } cursor-pointer`}
             >
               <tab.icon className="w-4 h-4" />
               <p className="ml-1"> {tab.label} </p>
               {tab.count !== undefined && (
-                <span className="ml-2 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                <span className="ml-2 text-xs bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-full">
                   {" "}
                   {tab.count}{" "}
                 </span>
@@ -123,7 +122,7 @@ const Connections = () => {
             .value.map((user) => (
               <div
                 key={user._id}
-                className="w-full max-w-88 flex gap-5 p-6 bg-white shadow rounded-md"
+                className="w-full max-w-88 flex gap-5 p-6 bg-white dark:bg-slate-900 shadow rounded-md border dark:border-slate-800"
               >
                 <img
                   src={user.profile_picture}
@@ -132,12 +131,12 @@ const Connections = () => {
                 />
 
                 <div className="flex-1">
-                  <p className="font-medium text-slate-700">
+                  <p className="font-medium text-slate-700 dark:text-white">
                     {" "}
                     {user.full_name}{" "}
                   </p>
-                  <p className="text-slate-500"> @{user.username} </p>
-                  <p className="text-slate-500 text-sm">
+                  <p className="text-slate-500 dark:text-slate-400"> @{user.username} </p>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
                     {" "}
                     {user.bio.slice(0, 30)}...{" "}
                   </p>
@@ -151,21 +150,21 @@ const Connections = () => {
                       </button>
                     }
                     {currentTab === "Following" && (
-                      <button onClick={ () => handleUnfollow(user._id) } className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer">
+                      <button onClick={() => handleUnfollow(user._id)} className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer">
                         Unfollow
                       </button>
                     )}
                     {currentTab === "Pending" && (
-                      <button onClick={ () => acceptConnection(user._id) } className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer">
+                      <button onClick={() => acceptConnection(user._id)} className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer">
                         Accept
                       </button>
                     )}
                     {currentTab === "Connections" && (
                       <button
-                        onClick={ () => {  navigate(`/message/${user._id}`) }}
-                        className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition active:scale-95"
+                        onClick={() => { navigate(`/message/${user._id}`) }}
+                        className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition active:scale-95"
                       >
-                        <MessageSquare className="w-3 h-3 text-slate-600" />
+                        <MessageSquare className="w-3 h-3 text-slate-600 dark:text-slate-400" />
                         Message
                       </button>
                     )}

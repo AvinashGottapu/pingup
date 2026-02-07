@@ -21,31 +21,32 @@ const PostCard = ({ post }) => {
   );
   // To get color text for the # words.
 
-  const handleLike = async () => { 
-     try {  
-    const { data } = await api.post('/api/post/like',{postId : post._id},{
-        headers: {  Authorization: `Bearer ${await getToken()}` }   });
-        
-        if(data.success) { 
-           toast.success(data.message);
-           setLikes(prev => { 
-            if(prev.includes(currentUser._id)) { 
-               return prev.filter(id => id !== currentUser._id);
-            } 
-            else { 
-              return [...prev, currentUser._id];
-            }
-           });
-         } 
-         else {  toast(data.message);  }
-      } 
-      catch (error) { 
-           toast.error(error.message);
+  const handleLike = async () => {
+    try {
+      const { data } = await api.post('/api/post/like', { postId: post._id }, {
+        headers: { Authorization: `Bearer ${await getToken()}` }
+      });
+
+      if (data.success) {
+        toast.success(data.message);
+        setLikes(prev => {
+          if (prev.includes(currentUser._id)) {
+            return prev.filter(id => id !== currentUser._id);
+          }
+          else {
+            return [...prev, currentUser._id];
+          }
+        });
       }
+      else { toast(data.message); }
+    }
+    catch (error) {
+      toast.error(error.message);
+    }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow p-4 space-y-4 w-full max-w-2xl">
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow p-4 space-y-4 w-full max-w-2xl border dark:border-slate-800">
       {/* User-Info */}
       <div onClick={() => navigate('/profile/' + post.user._id)} className="flex items-center gap-3 cursor-pointer">
         <img
@@ -56,10 +57,10 @@ const PostCard = ({ post }) => {
 
         <div className="flex flex-col">
           <div className="flex items-center space-x-1">
-            <span className="font-medium">{post.user.full_name}</span>
+            <span className="font-medium dark:text-gray-200">{post.user.full_name}</span>
             <BadgeCheck className="w-4 h-4 text-blue-500" />
           </div>
-          <div className="text-gray-500 text-sm">
+          <div className="text-gray-500 dark:text-gray-400 text-sm">
             @{post.user.username} .. {moment(post.createdAt).fromNow()}
           </div>
         </div>
@@ -69,7 +70,7 @@ const PostCard = ({ post }) => {
       {
         post.content && (
           <div
-            className="text-gray-800 text-sm whitespace-pre-line"
+            className="text-gray-800 dark:text-gray-300 text-sm whitespace-pre-line"
             dangerouslySetInnerHTML={{ __html: postWithHashtags }}
           />
         ) // IMP 2 under_scores
@@ -94,9 +95,8 @@ const PostCard = ({ post }) => {
         <div className="flex items-center gap-1">
           {/* likes → an array of user IDs who liked the post. */}
           <Heart
-            className={`w-4 h-4 cursor-pointer ${
-              likes.includes(currentUser._id) && "text-red-500 fill-red-500"
-            }`}
+            className={`w-4 h-4 cursor-pointer ${likes.includes(currentUser._id) && "text-red-500 fill-red-500"
+              }`}
             onClick={handleLike}
           />
           <span> {likes.length} </span>

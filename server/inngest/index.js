@@ -127,7 +127,7 @@ const deleteStory = inngest.createFunction(
 
         // For testing, using a short duration. User can change this back to 24 * 60 * 60 * 1000 later.
         // calculatedTime should be a Date object in the future
-        const deleteAt = new Date(Date.now() + 2 * 60 * 1000);
+        const deleteAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         console.log(`[Inngest] Sleeping until: ${deleteAt.toISOString()}`);
 
         await step.sleepUntil('wait-for-deletion-time', deleteAt)

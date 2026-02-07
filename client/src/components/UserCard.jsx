@@ -10,19 +10,19 @@ import { fetchUser } from '../features/user/userSlice'
 import { toast } from 'react-hot-toast'
 
 const UserCard = ({ user }) => {
- 
-   const navigate = useNavigate();
+
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const { getToken } = useAuth();
 
-  
+
   const currentUser = useSelector((state) => state.user.value);
 
   const handleFollow = async () => {
     try {
-       const token = await getToken();
+      const token = await getToken();
       const { data } = await api.post("/api/user/follow", { id: user._id },
-        {  headers: { Authorization: `Bearer ${token}` }, } );
+        { headers: { Authorization: `Bearer ${token}` }, });
 
       if (data.success) {
         toast.success(data.message);
@@ -43,13 +43,13 @@ const UserCard = ({ user }) => {
     try {
       const token = await getToken();
 
-      const { data } = await api.post( "/api/user/connect", { id: user._id },
-        {  headers: { Authorization: `Bearer ${token}` }, } );
+      const { data } = await api.post("/api/user/connect", { id: user._id },
+        { headers: { Authorization: `Bearer ${token}` }, });
 
       if (data.success) toast.success(data.message);
       else toast.error(data.message);
-    } 
-     catch (error) {
+    }
+    catch (error) {
       toast.error(error.message);
     }
   };
@@ -57,7 +57,7 @@ const UserCard = ({ user }) => {
   return (
     <div
       key={user._id}
-      className="p-4 pt-6 flex flex-col justify-between w-72 shadow border border-gray-200 rounded-md"
+      className="p-4 pt-6 flex flex-col justify-between w-72 shadow border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900 rounded-md"
     >
       <div className="text-center">
         <img

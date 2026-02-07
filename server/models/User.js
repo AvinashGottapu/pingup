@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
     followers: [{ type: String, ref: 'User' }], 
     following: [{ type: String, ref: 'User' }], 
     connections: [{ type: String, ref: 'User' }],
+    theme: { type: String, default: 'light', enum: ['light', 'dark'] },
 }, { timestamps: true, minimize: false });
 
 

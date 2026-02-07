@@ -1,11 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Baloo+Bhai+2&family=Outfit:wght@100..900&display=swap');
 
 @import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
 
- *{ 
-     font-family: "Outfit", sans-serif;
+* {
+    font-family: "Outfit", sans-serif;
 }
 
-.no-scrollbar::-webkit-scrollbar { 
+.no-scrollbar::-webkit-scrollbar {
     display: none;
 }
+
