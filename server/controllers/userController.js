@@ -1,6 +1,7 @@
 import imagekit from "../configs/imageKit.js";
 import Connection from "../models/Connections.js";
 import User from "../models/User.js"
+import { clerkClient } from "@clerk/express"
 import Post from "../models/Post.js"
 import fs from 'fs'
 import { inngest } from "../inngest/index.js";
@@ -11,11 +12,24 @@ export const getUserData = async (req, res) => {
    try {
       const { userId } = req.auth();
 
-      const user = await User.findById(userId);
+      let user = await User.findById(userId);
 
       if (!user) {
+         const clerkUser = await clerkClient.users.getUser(userId)
+         let username = clerkUser.emailAddresses[0].emailAddress.split('@')[0]
 
-         return res.json({ success: false, message: "User not found." })
+         const existing = await User.findOne({ username })
+         if (existing) {
+            username = username + Math.floor(Math.random() * 10000)
+         }
+
+         user = await User.create({
+            _id: userId,
+            email: clerkUser.emailAddresses[0].emailAddress,
+            full_name: clerkUser.firstName + (clerkUser.lastName ? " " + clerkUser.lastName : ""),
+            profile_picture: clerkUser.imageUrl,
+            username
+         })
       }
       res.json({ success: true, user })
 
@@ -116,7 +130,7 @@ export const discoverUsers = async (req, res) => {
             ]
          }
       )
-      const filteredUsers = allUsers.filter(user => user._id != userId);
+      const filteredUsers = allUsers.filter(user => user._id.toString() != userId);
 
       res.json({ success: true, users: filteredUsers });
 
@@ -231,6 +245,10 @@ export const getUserConnections = async (req, res) => {
       const { userId } = req.auth()
       const user = await User.findById(userId).populate('connections followers following')
 
+      if (!user) {
+         return res.json({ success: false, message: "User not found" })
+      }
+
       const connections = user.connections
       const followers = user.followers
       const following = user.following
@@ -273,6 +291,67 @@ export const acceptConnectionRequest = async (req, res) => {
       res.json({ success: false, message: error.message })
    }
 }
+
+// Reject Connection Request 
+export const rejectConnectionRequest = async (req, res) => {
+   try {
+      const { userId } = req.auth()
+      const { id } = req.body;
+
+      const connection = await Connection.findOneAndDelete({
+         from_user_id: id,
+         to_user_id: userId,
+         status: 'pending'
+      });
+
+      if (!connection) {
+         return res.json({ success: false, message: "Connection request not found" })
+      }
+
+      res.json({ success: true, message: "Connection request rejected" })
+
+   } catch (error) {
+      console.log(error)
+      res.json({ success: false, message: error.message })
+   }
+}
+
+// Delete Connection 
+export const deleteConnection = async (req, res) => {
+   try {
+      const { userId } = req.auth()
+      const { id } = req.body;
+
+      const user = await User.findById(userId);
+      const otherUser = await User.findById(id);
+
+      if (!user || !otherUser) {
+         return res.json({ success: false, message: "User not found" })
+      }
+
+      // Remove from connections array 
+      user.connections = user.connections.filter(connId => connId.toString() !== id);
+      otherUser.connections = otherUser.connections.filter(connId => connId.toString() !== userId);
+
+      await user.save();
+      await otherUser.save();
+
+      // Delete the Connection document 
+      await Connection.findOneAndDelete({
+         $or: [
+            { from_user_id: userId, to_user_id: id, status: 'accepted' },
+            { from_user_id: id, to_user_id: userId, status: 'accepted' }
+         ]
+      });
+
+      res.json({ success: true, message: "Connection removed successfully" })
+
+   } catch (error) {
+      console.log(error)
+      res.json({ success: false, message: error.message })
+   }
+}
+
 
 // Get User Profiles 
 export const getUserProfiles = async (req, res) => {

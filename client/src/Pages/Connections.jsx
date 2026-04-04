@@ -60,6 +60,44 @@ const Connections = () => {
     }
   };
 
+  const handleReject = async (userId) => {
+    try {
+      const token = await getToken();
+      const { data } = await api.post("/api/user/reject", { id: userId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (data.success) {
+        toast.success(data.message);
+        dispatch(fetchConnections(token));
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+
+  const handleRemoveConnection = async (userId) => {
+    if (!window.confirm("Are you sure you want to remove this connection?")) return;
+    try {
+      const token = await getToken();
+      const { data } = await api.post("/api/user/remove-connection", { id: userId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (data.success) {
+        toast.success(data.message);
+        dispatch(fetchConnections(token));
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
 
   useEffect(() => { getToken().then((token) => { dispatch(fetchConnections(token)) }) }, [])
 
@@ -98,8 +136,8 @@ const Connections = () => {
               onClick={() => setCurrentTab(tab.label)}
               key={tab.label}
               className={`flex items-center justify-center sm:justify-start px-3 py-1 text-sm rounded-md transition-colors ${currentTab === tab.label
-                  ? "bg-white dark:bg-slate-800 font-medium text-black dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white"
+                ? "bg-white dark:bg-slate-800 font-medium text-black dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white"
                 } cursor-pointer`}
             >
               <tab.icon className="w-4 h-4" />
@@ -140,35 +178,80 @@ const Connections = () => {
                     {" "}
                     {user.bio.slice(0, 30)}...{" "}
                   </p>
-                  <div className="flex max-sm:flex-col gap-2 mt-4">
-                    {
-                      <button
-                        onClick={() => navigate(`/profile/${user._id}`)}
-                        className="w-full p-2 text-sm rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer"
-                      >
-                        View Profile
-                      </button>
-                    }
-                    {currentTab === "Following" && (
-                      <button onClick={() => handleUnfollow(user._id)} className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer">
-                        Unfollow
-                      </button>
-                    )}
-                    {currentTab === "Pending" && (
-                      <button onClick={() => acceptConnection(user._id)} className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer">
-                        Accept
-                      </button>
-                    )}
-                    {currentTab === "Connections" && (
-                      <button
-                        onClick={() => { navigate(`/message/${user._id}`) }}
-                        className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition active:scale-95"
-                      >
-                        <MessageSquare className="w-3 h-3 text-slate-600 dark:text-slate-400" />
-                        Message
-                      </button>
-                    )}
-                  </div>
+                <div className="flex max-sm:flex-col gap-2 mt-4">
+  {/* Show View Profile button ONLY for non-Connections tabs */}
+  {currentTab !== "Connections" && currentTab !== "Pending" && (
+    <button
+      onClick={() => navigate(`/profile/${user._id}`)}
+      className="w-full p-2 text-sm rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer"
+    >
+      View Profile
+    </button>
+  )}
+
+  {currentTab === "Following" && (
+    <button onClick={() => handleUnfollow(user._id)} className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer">
+      Unfollow
+    </button>
+  )}
+{currentTab === "Pending" && (
+  <div className="flex flex-col gap-2 w-full">
+    {/* View Profile Button - Full Width */}
+    <button
+      onClick={() => navigate(`/profile/${user._id}`)}
+      className="w-full px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg transition-all duration-200 active:scale-95 shadow-md hover:shadow-lg"
+    >
+      View Profile
+    </button>
+
+    {/* Accept and Reject - Side by Side */}
+    <div className="flex gap-2 w-full">
+      <button 
+        onClick={() => acceptConnection(user._id)} 
+        className="w-full p-2 text-sm rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer"
+      >
+        Accept
+      </button>
+      <button 
+        onClick={() => handleReject(user._id)} 
+        className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer"
+      >
+        Reject
+      </button>
+    </div>
+  </div>
+)}
+
+{currentTab === "Connections" && (
+  <div className="flex flex-col gap-2 w-full">
+    {/* View Profile Button - Full Width */}
+    <button
+      onClick={() => navigate(`/profile/${user._id}`)}
+      className="w-full px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg transition-all duration-200 active:scale-95 shadow-md hover:shadow-lg "
+    >
+      View Profile
+    </button>
+
+    {/* Message and Remove Connection - Side by Side */}
+    <div className="flex gap-2 w-full">
+      <button
+        onClick={() => navigate(`/messages/${user._id}`)}
+        className="flex-1 flex items-center justify-center gap-2 w-full px-4 py-2 text-sm rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer"
+      >
+        <MessageSquare className="w-4 h-3" />
+        Message
+      </button>
+      
+      <button 
+        onClick={() => handleRemoveConnection(user._id)} 
+        className="w-full p-2 text-sm rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-black dark:text-white active:scale-95 transition cursor-pointer"
+      >
+        Remove
+      </button>
+    </div>
+  </div>
+)}
+</div>
                 </div>
               </div>
             ))}

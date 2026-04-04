@@ -1,5 +1,4 @@
 import React from "react";
-import { assets, dummyConnectionsData } from "../assets/assets.js";
 import { Eye, MessageSquare } from "lucide-react";
 import { useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'

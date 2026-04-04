@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { BadgeCheck, Heart, MessageCircle, Share2 } from "lucide-react";
 import moment from "moment";
-import { dummyUserData } from "../assets/assets";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useAuth } from '@clerk/clerk-react'
@@ -50,18 +49,18 @@ const PostCard = ({ post }) => {
       {/* User-Info */}
       <div onClick={() => navigate('/profile/' + post.user._id)} className="flex items-center gap-3 cursor-pointer">
         <img
-          src={post.user.profile_picture}
+          src={post.user?.profile_picture}
           alt=""
           className="w-10 h-10 rounded-full shadow"
         />
 
         <div className="flex flex-col">
           <div className="flex items-center space-x-1">
-            <span className="font-medium dark:text-gray-200">{post.user.full_name}</span>
+            <span className="font-medium dark:text-gray-200">{post.user?.full_name}</span>
             <BadgeCheck className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-gray-500 dark:text-gray-400 text-sm">
-            @{post.user.username} .. {moment(post.createdAt).fromNow()}
+            @{post.user?.username} .. {moment(post.createdAt).fromNow()}
           </div>
         </div>
       </div>

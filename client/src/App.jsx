@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import 'regenerator-runtime/runtime';
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import api from "./api/axios";
 import Login from "./Pages/Login";
@@ -9,6 +10,7 @@ import Connections from "./Pages/Connections";
 import Discover from "./Pages/Discover";
 import Profile from "./Pages/Profile";
 import CreatePost from "./Pages/CreatePost";
+import AIPage from "./Pages/AIPage";
 import Layout from "./Pages/Layout";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import { toast, Toaster } from 'react-hot-toast'
@@ -33,14 +35,36 @@ const App = () => {
    const pathnameRef = useRef(pathname)
 
    useEffect(() => {
+      let retryTimer;
+      let retryCount = 0;
+      const MAX_RETRIES = 15;
+      let cancelled = false;
+
       const fetchData = async () => {
-         if (user) {
-            const token = await getToken()
-            dispatch(fetchUser(token))
-            dispatch(fetchConnections(token))
+         if (user && !cancelled) {
+            try {
+               const token = await getToken()
+               const result = await dispatch(fetchUser(token))
+               dispatch(fetchConnections(token))
+
+               if (!result.payload && retryCount < MAX_RETRIES && !cancelled) {
+                  retryCount++
+                  retryTimer = setTimeout(fetchData, 2000)
+               }
+            } catch (error) {
+               if (retryCount < MAX_RETRIES && !cancelled) {
+                  retryCount++
+                  retryTimer = setTimeout(fetchData, 2000)
+               }
+            }
          }
       }
       fetchData()
+
+      return () => {
+         cancelled = true
+         if (retryTimer) clearTimeout(retryTimer)
+      }
    }, [user, getToken, dispatch])
 
    useEffect(() => {
@@ -147,6 +171,7 @@ const App = () => {
                <Route path="profile" element={<Profile />} />
                <Route path="profile/:profileId" element={<Profile />} />
                <Route path="create-post" element={<CreatePost />} />
+               <Route path="ai" element={<AIPage />} />
             </Route>
             <Route path="/room/:roomId" element={<Roompage />} />
          </Routes>

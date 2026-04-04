@@ -25,7 +25,7 @@ const syncUserCreation = inngest.createFunction(
         const userData = {
             _id: id,
             email: email_addresses[0].email_address,
-            full_name: first_name + " " + last_name,
+            full_name: first_name + (last_name ? " " + last_name : ""),
             profile_picture: image_url,
             username
         }

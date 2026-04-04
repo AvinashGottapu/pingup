@@ -165,3 +165,17 @@ export const rejectCall = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 }
+
+export const deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.body;
+        console.log(req.body);
+
+        await Message.findByIdAndDelete(messageId);
+        res.json({ success: true, message: "Message deleted" });
+
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+}

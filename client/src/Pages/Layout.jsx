@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux'
 const Layout = () => {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const user = useSelector((state) => state.user.value)         // dummyUserData;
+  const user = useSelector((state) => state.user.value)        
 
   return user ? (
     <div className='min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300'>
