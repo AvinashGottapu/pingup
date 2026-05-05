@@ -8,9 +8,18 @@ import {
   ShieldCheck,
   Mic,
   X,
+  Image,
+  Hash,
+  Quote,
+  MessageSquare,
+  ChevronDown,
+  Upload,
+  Copy,
+  Check,
 } from "lucide-react";
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
-import axios from "axios"
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 // ── Waveform Visualizer ──────────────────────────────────────────────────────
 const WaveformBar = ({ isListening }) => {
@@ -139,6 +148,17 @@ const WaveformBar = ({ isListening }) => {
 
 // ── Main AI Page ─────────────────────────────────────────────────────────────
 const AIPage = () => {
+  const navigate = useNavigate();
+  const [showViewDropdown, setShowViewDropdown] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = () => setShowViewDropdown(false);
+    if(showViewDropdown) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showViewDropdown]);
+
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -464,13 +484,39 @@ const sendMessage = async () => {
           </div>
 
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-              PING UP AI
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
-                PRO
-              </span>
-            </h1>
-            <div className="flex items-center gap-1.5">
+            <div className="relative" onClick={(e) => { e.stopPropagation(); setShowViewDropdown(!showViewDropdown); }}>
+              <div className="flex items-center gap-2 cursor-pointer group">
+                  <h1 className="text-sm font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors select-none">
+                    PING UP AI
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                      PRO
+                    </span>
+                  </h1>
+                  <ChevronDown size={14} className={`text-gray-500 transition-transform ${showViewDropdown ? "rotate-180" : ""}`} />
+              </div>
+              
+              {/* Dropdown Menu */}
+              {showViewDropdown && (
+                <div className="absolute top-full left-0 mt-3 w-48 bg-white dark:bg-slate-900 border border-gray-100 dark:border-white/10 rounded-xl shadow-xl shadow-indigo-500/10 py-1.5 z-50 overflow-hidden transform origin-top-left transition-all">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowViewDropdown(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10"
+                  >
+                    <MessageSquare size={16} />
+                    AI Chat
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate("/photo-magic"); setShowViewDropdown(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
+                  >
+                    <Image size={16} />
+                    Photo Magic
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 mt-0.5">
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-widest">
                 Systems Operational

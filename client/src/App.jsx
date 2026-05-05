@@ -11,6 +11,7 @@ import Discover from "./Pages/Discover";
 import Profile from "./Pages/Profile";
 import CreatePost from "./Pages/CreatePost";
 import AIPage from "./Pages/AIPage";
+import PhotoMagicPage from "./Pages/PhotoMagicPage";
 import Layout from "./Pages/Layout";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import { toast, Toaster } from 'react-hot-toast'
@@ -172,6 +173,7 @@ const App = () => {
                <Route path="profile/:profileId" element={<Profile />} />
                <Route path="create-post" element={<CreatePost />} />
                <Route path="ai" element={<AIPage />} />
+               <Route path="photo-magic" element={<PhotoMagicPage />} />
             </Route>
             <Route path="/room/:roomId" element={<Roompage />} />
          </Routes>
