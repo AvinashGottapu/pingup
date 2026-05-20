@@ -227,6 +227,8 @@ const AIPage = () => {
 const sendMessage = async () => {
   const text = inputValue.trim();
 
+   AI_URL = import.meta.env.VITE_AI_API_URL;
+
   // block sending while previous response is pending
   if (isWaitingForResponse) return;
 
@@ -249,8 +251,7 @@ const sendMessage = async () => {
       (m) => m.id !== 1 // Filter out bot greeting from history
     );
 
-    const { data } = await axios.post(
-      "http://localhost:8000/api/chat",
+    const { data } = axios.post(`${AI_URL}/api/chat`,
       {
         messages: currentMessages.map((m) => ({
           role: m.role,
