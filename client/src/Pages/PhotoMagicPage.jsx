@@ -50,14 +50,14 @@ const PhotoMagicPage = () => {
 
     setIsGenerating(true);
     setResult("");
-
+    const AI_URL = import.meta.env.VITE_AI_API_URL;
     const formData = new FormData();
     formData.append("type", type);
     formData.append("image", imageFile);
 
     try {
       const { data } = await axios.post(
-        "http://localhost:8000/api/photo-magic",
+        ` ${AI_URL}/api/photo-magic`,
         formData,
         {
           headers: {
