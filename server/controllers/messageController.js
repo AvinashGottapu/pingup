@@ -2,29 +2,36 @@ import fs from "fs"
 import imagekit from "../configs/imageKit.js";
 import Message from "../models/Message.js";
 
-let connections = {}
+let connections = {};
 
 export const sseController = (req, res) => {
     const { userId } = req.params;
-    console.log('New client connected:', userId);
+    console.log("New client connected:", userId);
 
-    // Required headers
+    const allowedOrigins = [
+        "http://localhost:5173",
+        "https://pingup-six-lake.vercel.app"
+    ];
+
+    const origin = req.headers.origin;
+
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("X-Accel-Buffering", "no");
 
-    // Flush headers (important!)
     if (res.flushHeaders) res.flushHeaders();
 
-    // Add connection for the user
     connections[userId] = res;
 
-    // Send initial SSE event properly formatted
     res.write(`event: log\n`);
-    res.write(`data: "Connected to SSE stream"\n\n`);
+    res.write(`data: ${JSON.stringify("Connected to SSE stream")}\n\n`);
 
-    // Remove connection on disconnect
     req.on("close", () => {
         delete connections[userId];
         console.log("Client disconnected:", userId);

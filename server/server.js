@@ -15,9 +15,16 @@ const PORT = process.env.PORT || 4000;
 const app = express();
 
 await connectDB();
-
 app.use(express.json());
-app.use(cors()); 
+
+app.use(cors({
+    origin: [
+        "http://localhost:5173",
+        "https://pingup-six-lake.vercel.app"
+    ],
+    credentials: true
+}));
+
 app.use(clerkMiddleware());
 
 app.get('/',(req,res) => res.send('Server is running'));
