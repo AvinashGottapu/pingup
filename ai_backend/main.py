@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from services.ml_service import check_toxicity
 
 load_dotenv()
 
@@ -60,6 +61,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
+
 
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -133,7 +135,22 @@ async def photo_magic_endpoint(
         print("Error in photo-magic:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class ToxicityRequest(BaseModel):
+    comment: str
+
+@app.post("/api/check-toxicity")
+def toxicity(data: ToxicityRequest):
+
+    result = check_toxicity(data.comment)
+
+    return {
+        "toxicity": result
+    }
+
+
 @app.get("/")
 def read_root():
     return {"message": "PingUp AI Backend is running"}
+
 
