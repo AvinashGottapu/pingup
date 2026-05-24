@@ -1,19 +1,24 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import api from '../../api/axios'
 
-
 const initialState = {
     messages: []
 }
 
-export const fetchMessages = createAsyncThunk('messages/fetchMessages',
-    async ({ token, userId }) => {
+export const fetchMessages = createAsyncThunk(
+    'messages/fetchMessages',
+    async ({ token, userId, cursor = null, limit = 25, mode = 'replace' }) => {
+        const { data } = await api.post(
+            'api/message/get',
+            { to_user_id: userId, cursor, limit },
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        )
 
-        const { data } = await api.post('api/message/get', { to_user_id: userId }, {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-        return data.success ? data : null
-    })
+        return data.success ? { ...data, mode } : null
+    }
+)
 
 const messagesSlice = createSlice({
     name: 'messages',
@@ -23,7 +28,13 @@ const messagesSlice = createSlice({
             state.messages = action.payload
         },
         addMessages: (state, action) => {
-            state.messages = [...state.messages, action.payload]
+            const nextMessage = action.payload
+
+            if (state.messages.some((message) => message._id === nextMessage._id)) {
+                return
+            }
+
+            state.messages = [nextMessage, ...state.messages]
         },
         resetMessages: (state) => {
             state.messages = [];
@@ -34,7 +45,16 @@ const messagesSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder.addCase(fetchMessages.fulfilled, (state, action) => {
-            if (action.payload) { state.messages = action.payload.messages }
+            if (!action.payload) {
+                return
+            }
+
+            if (action.payload.mode === 'prepend') {
+                state.messages = [...action.payload.messages, ...state.messages]
+                return
+            }
+
+            state.messages = action.payload.messages
         })
     }
 })

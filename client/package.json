@@ -25,6 +25,7 @@
     "react-router-dom": "^7.9.5",
     "react-speech-recognition": "^4.0.1",
     "regenerator-runtime": "^0.14.1",
+    "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.1.16"
   },
   "devDependencies": {
