@@ -1,5 +1,17 @@
 import { Server } from 'socket.io'
 import { verifyToken } from '@clerk/backend'
+import {
+  clearTypingStatus,
+  deleteSession,
+  getOnlineUsers,
+  isUserOnline,
+  removeOnlineUser,
+  setOnlineUser,
+  setSession,
+  setTypingStatus,
+} from './configs/redis.js'
+
+export { isUserOnline } from './configs/redis.js'
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -7,6 +19,16 @@ const allowedOrigins = [
 ]
 
 let io
+
+const broadcastPresenceStatus = (userId, isOnline) => {
+  if (!io) return
+  io.emit('presence:status', { userId, isOnline })
+}
+
+const broadcastTypingStatus = (toUserId, userId, isTyping) => {
+  if (!io) return
+  emitToUser(toUserId, 'typing:status', { userId, isTyping })
+}
 
 export const initSocketServer = (httpServer) => {
   io = new Server(httpServer, {
@@ -45,16 +67,23 @@ export const initSocketServer = (httpServer) => {
     }
   })
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     socket.join(socket.userId)
 
-    socket.on('call:invite', ({ to_user_id, roomId, callerName }, ack) => {
+    await setOnlineUser(socket.userId)
+    await setSession(socket.userId, socket.id)
+
+    const onlineUsers = await getOnlineUsers()
+    socket.emit('presence:sync', onlineUsers)
+    broadcastPresenceStatus(socket.userId, true)
+
+    socket.on('call:invite', async ({ to_user_id, roomId, callerName }, ack) => {
       if (!to_user_id || !roomId || !callerName) {
         ack?.({ success: false, message: 'Invalid call payload' })
         return
       }
 
-      if (!isUserOnline(to_user_id)) {
+      if (!(await isUserOnline(to_user_id))) {
         ack?.({ success: false, message: 'User is not available' })
         return
       }
@@ -69,13 +98,13 @@ export const initSocketServer = (httpServer) => {
       ack?.({ success: true })
     })
 
-    socket.on('call:reject', ({ to_user_id }, ack) => {
+    socket.on('call:reject', async ({ to_user_id }, ack) => {
       if (!to_user_id) {
         ack?.({ success: false, message: 'Invalid call payload' })
         return
       }
 
-      if (!isUserOnline(to_user_id)) {
+      if (!(await isUserOnline(to_user_id))) {
         ack?.({ success: false, message: 'User is not available' })
         return
       }
@@ -88,8 +117,27 @@ export const initSocketServer = (httpServer) => {
       ack?.({ success: true })
     })
 
-    socket.on('disconnect', () => {
+    socket.on('typing:start', async ({ to_user_id }) => {
+      if (!to_user_id) return
+
+      const chatId = [socket.userId, to_user_id].sort().join(':')
+      await setTypingStatus(chatId, socket.userId)
+      broadcastTypingStatus(to_user_id, socket.userId, true)
+    })
+
+    socket.on('typing:stop', async ({ to_user_id }) => {
+      if (!to_user_id) return
+
+      const chatId = [socket.userId, to_user_id].sort().join(':')
+      await clearTypingStatus(chatId, socket.userId)
+      broadcastTypingStatus(to_user_id, socket.userId, false)
+    })
+
+    socket.on('disconnect', async () => {
       socket.leave(socket.userId)
+      await removeOnlineUser(socket.userId)
+      await deleteSession(socket.userId, socket.id)
+      broadcastPresenceStatus(socket.userId, false)
     })
   })
 
@@ -99,11 +147,6 @@ export const initSocketServer = (httpServer) => {
 export const emitToUser = (userId, event, payload) => {
   if (!io) return
   io.to(userId).emit(event, payload)
-}
-
-export const isUserOnline = (userId) => {
-  if (!io) return false
-  return io.sockets.adapter.rooms.has(userId)
 }
 
 export const getSocketIo = () => io

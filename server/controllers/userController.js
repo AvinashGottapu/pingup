@@ -5,12 +5,21 @@ import { clerkClient } from "@clerk/express"
 import Post from "../models/Post.js"
 import fs from 'fs'
 import { inngest } from "../inngest/index.js";
+import { deletePattern, getCachedJson, setCachedJson } from "../configs/redis.js";
 
+const USER_CACHE_TTL = 300;
+const PROFILE_CACHE_TTL = 300;
 
 // Get user data using userId
 export const getUserData = async (req, res) => {
    try {
       const { userId } = req.auth();
+      const cacheKey = `user:data:${userId}`;
+      const cachedUser = await getCachedJson(cacheKey);
+
+      if (cachedUser) {
+         return res.json({ success: true, user: cachedUser });
+      }
 
       let user = await User.findById(userId);
 
@@ -31,6 +40,9 @@ export const getUserData = async (req, res) => {
             username
          })
       }
+
+      await setCachedJson(cacheKey, user.toObject ? user.toObject() : user, USER_CACHE_TTL);
+
       res.json({ success: true, user })
 
    } catch (error) {
@@ -105,6 +117,8 @@ export const updateUserData = async (req, res) => {
          updatedData.cover_photo = url;
       }
       const user = await User.findByIdAndUpdate(userId, updatedData, { new: true })
+      await setCachedJson(`user:data:${userId}`, user.toObject ? user.toObject() : user, USER_CACHE_TTL)
+      await deletePattern('profile:*')
       res.json({ success: true, user, message: "Profile Updated Successfully" })
 
 
@@ -357,12 +371,20 @@ export const deleteConnection = async (req, res) => {
 export const getUserProfiles = async (req, res) => {
    try {
       const { profileId } = req.body;
+      const cacheKey = `profile:${profileId}`;
+      const cachedProfile = await getCachedJson(cacheKey);
+
+      if (cachedProfile) {
+         return res.json({ success: true, profile: cachedProfile.profile, posts: cachedProfile.posts })
+      }
+
       const profile = await User.findById(profileId)
 
       if (!profile) {
          return res.json({ success: false, message: "profile not found" })
       }
       const posts = await Post.find({ user: profileId }).populate('user')
+      await setCachedJson(cacheKey, { profile, posts }, PROFILE_CACHE_TTL)
       res.json({ success: true, profile, posts })
 
    } catch (error) {

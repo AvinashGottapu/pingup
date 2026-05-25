@@ -49,6 +49,8 @@ const UserCard = ({ user }) => {
 
   const isFollowing = currentUser && currentUser.following?.includes(user._id);
   const isConnected = currentUser && currentUser.connections?.includes(user._id);
+  const onlineUsers = useSelector((state) => state.presence.onlineUsers);
+  const isUserOnline = Boolean(onlineUsers[user._id] ?? user.isOnline);
 
   return (
     <div className="group relative w-full">
@@ -72,7 +74,15 @@ const UserCard = ({ user }) => {
                 alt={user.full_name}
                 className="relative w-24 h-24 rounded-full object-cover border-4 border-white dark:border-slate-800 shadow-2xl"
               />
-              <div className="absolute bottom-1 right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-white dark:border-slate-800 shadow-lg"></div>
+              <div
+                className="absolute bottom-1 right-1 px-2 py-0.5 rounded-full border-2 border-white dark:border-slate-800 shadow-lg text-xs font-semibold"
+                style={{
+                  background: isUserOnline ? '#34d399' : '#d1d5db',
+                  color: isUserOnline ? '#065f46' : '#374151',
+                }}
+              >
+                {isUserOnline ? 'Online' : 'Offline'}
+              </div>
             </div>
           </div>
 
@@ -81,11 +91,7 @@ const UserCard = ({ user }) => {
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-0.5 truncate px-2">
               {user.full_name}
             </h3>
-            {user.username && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-2.5 truncate">
-                @{user.username}
-              </p>
-            )}
+            {/* Username/email removed as requested */}
             {user.bio && (
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed px-3 line-clamp-2 min-h-[32px]">
                 {user.bio}

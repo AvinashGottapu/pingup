@@ -22,6 +22,7 @@
     "express": "^5.1.0",
     "imagekit": "^6.0.0",
     "inngest": "^4.4.0",
+    "ioredis": "^5.7.0",
     "mongoose": "^8.19.3",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.10",

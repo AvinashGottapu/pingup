@@ -101,6 +101,7 @@ const ChatBox = () => {
   const { messages } = useSelector((state) => state.messages);
   const currentUser = useSelector((state) => state.user.value);
   const connections = useSelector((state) => state.connections.connections);
+  const onlineUsers = useSelector((state) => state.presence.onlineUsers);
 
   const [activeMsgId, setActiveMsgId] = useState(null);
   const [isListening, setIsListening] = useState(false);
@@ -398,17 +399,33 @@ const ChatBox = () => {
     }
   }, [messages]);
 
+  const isChatUserOnline = Boolean(onlineUsers[user?._id] ?? user?.isOnline);
+
   return user && (
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="relative z-10 flex items-center gap-3 px-4 py-3 md:px-8 md:gap-4 md:py-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-lg shadow-slate-200/50 dark:shadow-slate-950/50">
         <div className="relative flex-shrink-0">
           <img src={user.profile_picture} alt={user.full_name} className="size-10 md:size-11 rounded-full ring-2 ring-indigo-500/20 dark:ring-indigo-400/20 object-cover" />
-          <div className="absolute bottom-0 right-0 size-2.5 md:size-3 bg-emerald-500 dark:bg-emerald-400 rounded-full border-2 border-white dark:border-slate-900" />
         </div>
 
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">{user.full_name}</p>
-          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">@{user.username}</p>
+          <div
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs md:text-sm font-semibold transition-all duration-300 ${
+              isChatUserOnline
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 shadow-[0_0_0_1px_rgba(16,185,129,0.25),0_10px_30px_rgba(16,185,129,0.2)]'
+                : 'bg-slate-500/15 text-slate-700 dark:text-slate-200 shadow-[0_0_0_1px_rgba(100,116,139,0.2),0_10px_30px_rgba(15,23,42,0.12)]'
+            }`}
+          >
+            <span
+              className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                isChatUserOnline
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-slate-400 animate-pulse'
+              }`}
+            />
+            <span>{isChatUserOnline ? 'Online' : 'Offline'}</span>
+          </div>
         </div>
 
         <button
@@ -549,7 +566,7 @@ const ChatBox = () => {
               ref={textareaRef}
               rows={1}
               className="flex-1 outline-none text-[13px] text-slate-800 dark:text-white bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500 resize-none overflow-hidden leading-snug py-1.5 max-h-28 self-center"
-              placeholder="Type a message…"
+              placeholder="Type a messageï¿½"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();

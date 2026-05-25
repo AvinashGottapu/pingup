@@ -1,12 +1,21 @@
 import fs from "fs";
 import mongoose from "mongoose";
 import imagekit from "../configs/imageKit.js";
+import {
+  deletePattern,
+  getCachedJson,
+  getCounter,
+  setCachedJson,
+  setCounter,
+} from "../configs/redis.js";
 import Post from "../models/Post.js";
 import Comment from "../models/Comment.js";
 import User from "../models/User.js";
 
 const FEED_LIMIT = 10;
 const COMMENTS_LIMIT = 10;
+const FEED_CACHE_TTL = 30;
+const COMMENT_COUNT_TTL = 60 * 60 * 24;
 
 const parseCursor = (cursor) => {
   if (!cursor) return null;
@@ -136,6 +145,8 @@ export const addPost = async (req, res) => {
       post_type,
     });
 
+    await deletePattern('feed:*');
+
     res.json({
       success: true,
       message: "Post Created Successfully",
@@ -160,6 +171,12 @@ export const getFeedPosts = async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || FEED_LIMIT, FEED_LIMIT);
 
     const userIds = [userId, ...user.connections, ...user.following];
+    const feedCacheKey = `feed:${userId}:${cursor || 'start'}:${limit}`;
+    const cachedFeed = await getCachedJson(feedCacheKey);
+
+    if (cachedFeed) {
+      return res.json(cachedFeed);
+    }
 
     const cursorFilter = buildCursorFilter(cursor);
 
@@ -179,6 +196,8 @@ export const getFeedPosts = async (req, res) => {
     const formattedPosts = await Promise.all(
       paginatedPosts.map(async (post) => {
         const postObj = post.toObject();
+        const commentCountKey = `counter:post:comments:${post._id.toString()}`;
+        const cachedCommentCount = await getCounter(commentCountKey);
 
         const {
           comments: paginatedComments,
@@ -189,7 +208,7 @@ export const getFeedPosts = async (req, res) => {
         return {
           ...postObj,
           comments: paginatedComments,
-          total_comments: postObj.total_comments ?? 0,
+          total_comments: cachedCommentCount ?? postObj.total_comments ?? 0,
           nextCommentCursor,
           hasMoreComments,
         };
@@ -198,19 +217,19 @@ export const getFeedPosts = async (req, res) => {
 
     const nextCursor =
       hasMore && paginatedPosts.length > 0
-        ? `${paginatedPosts[
-            paginatedPosts.length - 1
-          ].createdAt.toISOString()}|${paginatedPosts[
-            paginatedPosts.length - 1
-          ]._id.toString()}`
+        ? `${paginatedPosts[paginatedPosts.length - 1].createdAt.toISOString()}|${paginatedPosts[paginatedPosts.length - 1]._id.toString()}`
         : null;
 
-    res.json({
+    const response = {
       success: true,
       posts: formattedPosts,
       nextCursor,
       hasMore,
-    });
+    };
+
+    await setCachedJson(feedCacheKey, response, FEED_CACHE_TTL);
+
+    res.json(response);
   } catch (error) {
     console.log(error);
     res.json({
@@ -228,9 +247,10 @@ export const likePost = async (req, res) => {
     const post = await Post.findById(postId);
 
     if (post.likes_count.includes(userId)) {
-      post.likes_count = post.likes_count.filter((user) => user != userId);
+      post.likes_count = post.likes_count.filter((user) => user !== userId);
 
       await post.save();
+      await deletePattern('feed:*');
 
       res.json({
         success: true,
@@ -240,6 +260,7 @@ export const likePost = async (req, res) => {
       post.likes_count.push(userId);
 
       await post.save();
+      await deletePattern('feed:*');
 
       res.json({
         success: true,
@@ -284,8 +305,16 @@ export const addComment = async (req, res) => {
       dislikes_count: [],
     });
 
-    post.total_comments = (post.total_comments || 0) + 1;
+    const commentCountKey = `counter:post:comments:${postId}`;
+    const totalComments =
+      (await getCounter(commentCountKey)) ?? post.total_comments ?? 0;
+
+    const nextCommentCount = totalComments + 1;
+    await setCounter(commentCountKey, nextCommentCount, COMMENT_COUNT_TTL);
+
+    post.total_comments = nextCommentCount;
     await post.save();
+    await deletePattern('feed:*');
 
     await newComment.populate({
       path: "user",
@@ -430,8 +459,15 @@ export const deleteComment = async (req, res) => {
     await Comment.deleteOne({ _id: commentId });
 
     const post = await Post.findById(postId);
-    post.total_comments = Math.max(0, (post.total_comments || 1) - 1);
+    const commentCountKey = `counter:post:comments:${postId}`;
+    const currentCommentCount =
+      (await getCounter(commentCountKey)) ?? post.total_comments ?? 0;
+    const nextCommentCount = Math.max(0, currentCommentCount - 1);
+
+    await setCounter(commentCountKey, nextCommentCount, COMMENT_COUNT_TTL);
+    post.total_comments = nextCommentCount;
     await post.save();
+    await deletePattern('feed:*');
 
     res.json({
       success: true,

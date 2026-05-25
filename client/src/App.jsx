@@ -18,6 +18,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { fetchUser } from './features/user/userSlice'
 import { fetchConnections } from './features/connections/connectionsSlice'
 import { addMessages, deleteMessage } from './features/messages/messagesSlice'
+import { clearPresence, setPresenceSnapshot, setPresenceStatus } from './features/presence/presenceSlice'
 import Notification from './components/Notification'
 import Roompage from './calling/Roompage'
 import CallNotification from './components/CallNotification'
@@ -139,10 +140,20 @@ const App = () => {
         console.error('Socket error:', error)
       }
 
+      const handlePresenceSync = (onlineUsers) => {
+        dispatch(setPresenceSnapshot(onlineUsers))
+      }
+
+      const handlePresenceStatus = ({ userId, isOnline }) => {
+        dispatch(setPresenceStatus({ userId, isOnline }))
+      }
+
       currentSocket.on('message:new', handleNewMessage)
       currentSocket.on('message:deleted', handleDeletedMessage)
       currentSocket.on('call:incoming', handleIncomingCall)
       currentSocket.on('call:rejected', handleCallRejected)
+      currentSocket.on('presence:sync', handlePresenceSync)
+      currentSocket.on('presence:status', handlePresenceStatus)
       currentSocket.on('connect_error', handleSocketError)
     }
 
@@ -156,8 +167,11 @@ const App = () => {
         socket.off('message:deleted')
         socket.off('call:incoming')
         socket.off('call:rejected')
+        socket.off('presence:sync')
+        socket.off('presence:status')
         socket.off('connect_error')
       }
+      dispatch(clearPresence())
     }
   }, [user, getToken, dispatch, navigate])
 

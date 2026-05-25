@@ -52,6 +52,7 @@ const PostCard = ({ post }) => {
     /(#\w+)/g,
     '<span class="text-indigo-500 font-medium"> $1 </span>'
   );
+ 
 
   const resetTextarea = () => {
     setCommentInput("");
@@ -307,10 +308,6 @@ const PostCard = ({ post }) => {
               {post.user?.full_name}
             </span>
             <BadgeCheck className="w-4 h-4 text-blue-500" />
-          </div>
-
-          <div className="text-gray-500 dark:text-gray-400 text-sm">
-            @{post.user?.username} &middot; {moment(post.createdAt).fromNow()}
           </div>
         </div>
       </div>

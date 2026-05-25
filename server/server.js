@@ -3,6 +3,7 @@ import cors from 'cors'
 import http from 'http'
 import 'dotenv/config'
 import connectDB from './configs/db.js'
+import { initRedis } from './configs/redis.js'
 import { inngest, functions } from './inngest/index.js'
 import { serve } from 'inngest/express'
 import { clerkMiddleware } from '@clerk/express'
@@ -18,6 +19,7 @@ const app = express()
 const server = http.createServer(app)
 
 await connectDB()
+await initRedis()
 
 app.use(express.json())
 app.use(cors({
