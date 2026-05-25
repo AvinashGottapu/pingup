@@ -700,7 +700,7 @@ const sendMessage = async () => {
         </p>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 5px;
         }

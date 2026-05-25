@@ -2,6 +2,7 @@ import fs from "fs";
 import mongoose from "mongoose";
 import imagekit from "../configs/imageKit.js";
 import Post from "../models/Post.js";
+import Comment from "../models/Comment.js";
 import User from "../models/User.js";
 
 const FEED_LIMIT = 10;
@@ -51,6 +52,46 @@ const parseCommentCursor = (cursor) => {
   return {
     createdAt: new Date(createdAt),
     id,
+  };
+};
+
+const getPaginatedComments = async (postId, cursor, limit) => {
+  const parsedCursor = parseCommentCursor(cursor);
+
+  const cursorFilter = {};
+
+  if (parsedCursor) {
+    cursorFilter.$or = [
+      { createdAt: { $lt: parsedCursor.createdAt } },
+      {
+        createdAt: parsedCursor.createdAt,
+        _id: { $lt: new mongoose.Types.ObjectId(parsedCursor.id) },
+      },
+    ];
+  }
+
+  const comments = await Comment.find({ post_id: postId, ...cursorFilter })
+    .populate("user", "full_name username profile_picture")
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limit + 1)
+    .exec();
+
+  const hasMore = comments.length > limit; // That extra +1 is only for checking hasMore.
+  const paginatedComments = hasMore ? comments.slice(0, limit) : comments;
+
+  const nextCursor =
+    hasMore && paginatedComments.length > 0
+      ? `${new Date(
+          paginatedComments[paginatedComments.length - 1].createdAt
+        ).toISOString()}|${paginatedComments[
+          paginatedComments.length - 1
+        ]._id.toString()}`
+      : null;
+
+  return {
+    comments: paginatedComments,
+    hasMore,
+    nextCursor,
   };
 };
 
@@ -129,45 +170,31 @@ export const getFeedPosts = async (req, res) => {
 
     const posts = await Post.find(query)
       .populate("user")
-      .populate("comments.user", "full_name username profile_picture")
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1);
 
     const hasMore = posts.length > limit;
     const paginatedPosts = hasMore ? posts.slice(0, limit) : posts;
 
-    const formattedPosts = paginatedPosts.map((post) => {
-      const postObj = post.toObject();
+    const formattedPosts = await Promise.all(
+      paginatedPosts.map(async (post) => {
+        const postObj = post.toObject();
 
-      const allSortedComments = [...postObj.comments].sort((a, b) => {
-        const dateDiff = new Date(b.createdAt) - new Date(a.createdAt);
+        const {
+          comments: paginatedComments,
+          hasMore: hasMoreComments,
+          nextCursor: nextCommentCursor,
+        } = await getPaginatedComments(post._id, null, COMMENTS_LIMIT);
 
-        if (dateDiff !== 0) return dateDiff;
-
-        return b._id.toString().localeCompare(a._id.toString());
-      });
-
-      const slicedComments = allSortedComments.slice(0, COMMENTS_LIMIT);
-
-      const hasMoreComments = allSortedComments.length > COMMENTS_LIMIT;
-
-      const nextCommentCursor =
-        hasMoreComments && slicedComments.length > 0
-          ? `${new Date(
-              slicedComments[slicedComments.length - 1].createdAt
-            ).toISOString()}|${slicedComments[
-              slicedComments.length - 1
-            ]._id.toString()}`
-          : null;
-
-      return {
-        ...postObj,
-        comments: slicedComments,
-        total_comments: postObj.total_comments || allSortedComments.length,
-        nextCommentCursor,
-        hasMoreComments,
-      };
-    });
+        return {
+          ...postObj,
+          comments: paginatedComments,
+          total_comments: postObj.total_comments ?? 0,
+          nextCommentCursor,
+          hasMoreComments,
+        };
+      })
+    );
 
     const nextCursor =
       hasMore && paginatedPosts.length > 0
@@ -249,27 +276,25 @@ export const addComment = async (req, res) => {
       });
     }
 
-    post.comments.push({
+    const newComment = await Comment.create({
+      post_id: postId,
       user: userId,
       content: content.trim(),
       likes_count: [],
       dislikes_count: [],
     });
 
-    post.total_comments = post.comments.length;
-
+    post.total_comments = (post.total_comments || 0) + 1;
     await post.save();
 
-    await post.populate({
-      path: "comments.user",
+    await newComment.populate({
+      path: "user",
       select: "full_name username profile_picture",
     });
 
-    const addedComment = post.comments[post.comments.length - 1];
-
     res.json({
       success: true,
-      comment: addedComment,
+      comment: newComment,
     });
   } catch (error) {
     console.log(error);
@@ -285,21 +310,19 @@ export const likeComment = async (req, res) => {
     const { userId } = req.auth();
     const { postId, commentId } = req.body;
 
-    const post = await Post.findById(postId);
-
-    if (!post) {
-      return res.json({
-        success: false,
-        message: "Post not found.",
-      });
-    }
-
-    const comment = post.comments.id(commentId);
+    const comment = await Comment.findById(commentId);
 
     if (!comment) {
       return res.json({
         success: false,
         message: "Comment not found.",
+      });
+    }
+
+    if (!comment.post_id.equals(postId)) {
+      return res.json({
+        success: false,
+        message: "Comment does not belong to this post.",
       });
     }
 
@@ -312,7 +335,7 @@ export const likeComment = async (req, res) => {
       );
     }
 
-    await post.save();
+    await comment.save();
 
     res.json({
       success: true,
@@ -334,21 +357,19 @@ export const dislikeComment = async (req, res) => {
     const { userId } = req.auth();
     const { postId, commentId } = req.body;
 
-    const post = await Post.findById(postId);
-
-    if (!post) {
-      return res.json({
-        success: false,
-        message: "Post not found.",
-      });
-    }
-
-    const comment = post.comments.id(commentId);
+    const comment = await Comment.findById(commentId);
 
     if (!comment) {
       return res.json({
         success: false,
         message: "Comment not found.",
+      });
+    }
+
+    if (!comment.post_id.equals(postId)) {
+      return res.json({
+        success: false,
+        message: "Comment does not belong to this post.",
       });
     }
 
@@ -361,7 +382,7 @@ export const dislikeComment = async (req, res) => {
       comment.likes_count = comment.likes_count.filter((id) => id !== userId);
     }
 
-    await post.save();
+    await comment.save();
 
     res.json({
       success: true,
@@ -383,21 +404,19 @@ export const deleteComment = async (req, res) => {
     const { userId } = req.auth();
     const { postId, commentId } = req.body;
 
-    const post = await Post.findById(postId);
-
-    if (!post) {
-      return res.json({
-        success: false,
-        message: "Post not found.",
-      });
-    }
-
-    const comment = post.comments.id(commentId);
+    const comment = await Comment.findById(commentId);
 
     if (!comment) {
       return res.json({
         success: false,
         message: "Comment not found.",
+      });
+    }
+
+    if (!comment.post_id.equals(postId)) {
+      return res.json({
+        success: false,
+        message: "Comment does not belong to this post.",
       });
     }
 
@@ -408,12 +427,10 @@ export const deleteComment = async (req, res) => {
       });
     }
 
-    post.comments = post.comments.filter(
-      (commentItem) => commentItem._id.toString() !== commentId
-    );
+    await Comment.deleteOne({ _id: commentId });
 
-    post.total_comments = post.comments.length;
-
+    const post = await Post.findById(postId);
+    post.total_comments = Math.max(0, (post.total_comments || 1) - 1);
     await post.save();
 
     res.json({
@@ -437,10 +454,7 @@ export const getPostComments = async (req, res) => {
     const cursor = req.query.cursor;
     const limit = Math.min(Number(req.query.limit) || COMMENTS_LIMIT, COMMENTS_LIMIT);
 
-    const post = await Post.findById(postId).populate(
-      "comments.user",
-      "full_name username profile_picture"
-    );
+    const post = await Post.findById(postId);
 
     if (!post) {
       return res.json({
@@ -449,53 +463,15 @@ export const getPostComments = async (req, res) => {
       });
     }
 
-    const parsedCursor = parseCommentCursor(cursor);
-
-    const allComments = [...post.comments].sort((a, b) => {
-      const dateDiff = new Date(b.createdAt) - new Date(a.createdAt);
-
-      if (dateDiff !== 0) return dateDiff;
-
-      return b._id.toString().localeCompare(a._id.toString());
-    });
-
-    const filteredComments = allComments.filter((comment) => {
-      if (!parsedCursor) return true;
-
-      const commentDate = new Date(comment.createdAt);
-      const cursorDate = parsedCursor.createdAt;
-      const cursorId = parsedCursor.id;
-
-      if (commentDate < cursorDate) return true;
-
-      if (
-        commentDate.getTime() === cursorDate.getTime() &&
-        comment._id.toString() < cursorId
-      ) {
-        return true;
-      }
-
-      return false;
-    });
-
-    const hasMore = filteredComments.length > limit;
-
-    const paginatedComments = hasMore
-      ? filteredComments.slice(0, limit)
-      : filteredComments;
-
-    const nextCursor =
-      hasMore && paginatedComments.length > 0
-        ? `${new Date(
-            paginatedComments[paginatedComments.length - 1].createdAt
-          ).toISOString()}|${paginatedComments[
-            paginatedComments.length - 1
-          ]._id.toString()}`
-        : null;
+    const { comments, nextCursor, hasMore } = await getPaginatedComments(
+      postId,
+      cursor,
+      limit
+    );
 
     res.json({
       success: true,
-      comments: paginatedComments,
+      comments,
       nextCursor,
       hasMore,
     });
