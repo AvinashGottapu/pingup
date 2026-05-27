@@ -58,6 +58,23 @@ const ChatBox = () => {
     }, delay);
   };
 
+  const fetchPeerPresence = async () => {
+    try {
+      const token = await getToken();
+      const { data } = await api.get(`/api/user/presence/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (data?.success && data?.presence) {
+        setPeerPresence(data.presence);
+      }
+    } catch (err) {
+      console.warn('Failed to load user presence', err.message || err);
+    }
+  };
+
   const fetchUserMessages = async () => {
     try {
       setIsInitialLoading(true);
@@ -191,6 +208,12 @@ const ChatBox = () => {
   }, [connections, userId]);
 
   useEffect(() => {
+    if (!userId) return; 
+    // After reload, frontend starts fresh. It does not know.. so use this state...
+    fetchPeerPresence();
+  }, [userId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const setupTypingSocket = async () => {
@@ -214,7 +237,6 @@ const ChatBox = () => {
 
       const handlePresenceUpdate = ({ users = {}, onlineUsers = [] }) => {
         const nextPresence = users?.[userId];
-
         if (nextPresence) {
           setPeerPresence(nextPresence);
           return;

@@ -1,6 +1,7 @@
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import { verifyToken } from '@clerk/backend'
+import User from './models/User.js'
 import { redis, redisSubscriber } from './configs/redis.js'
 import {
   clearTypingStatus,
@@ -51,9 +52,11 @@ const initRedisAdapter = async () => {
 
 const broadcastPresenceUpdate = async (userId, isOnline) => {
   const onlineUsers = (await getOnlineUsers()) || []
-  const lastSeen = isOnline
+  const redisLastSeen = (await getSession(userId))?.lastSeen || null
+  const dbLastSeen = isOnline
     ? null
-    : (await getSession(userId))?.lastSeen || null
+    : (await User.findById(userId).select('lastSeen'))?.lastSeen || null
+  const lastSeen = isOnline ? null : redisLastSeen || dbLastSeen
 
   io.emit('presence:update', {
     onlineUsers,
@@ -131,6 +134,7 @@ export const initSocketServer = async (httpServer) => {
       const conversationKey = getConversationKey(socket.userId, to_user_id)
       await clearTypingStatus(conversationKey, socket.userId)
 
+      
       emitToUser(to_user_id, 'typing:stop', {
         from_user_id: socket.userId,
         conversationKey,
@@ -180,7 +184,9 @@ export const initSocketServer = async (httpServer) => {
     socket.on('disconnect', async () => {
       socket.leave(socket.userId)
       await unregisterOnlineUser(socket.userId, socket.id)
-      await setSession(socket.userId, { lastSeen: new Date().toISOString() })
+      const lastSeenIso = new Date().toISOString()
+      await setSession(socket.userId, { lastSeen: lastSeenIso })
+      await User.findByIdAndUpdate(socket.userId, { lastSeen: lastSeenIso }).catch(() => {})
 
       const activeConversation = await getTypingConversationForUser(socket.userId)
       if (activeConversation) {

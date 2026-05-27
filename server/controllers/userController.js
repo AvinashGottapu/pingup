@@ -268,13 +268,35 @@ export const getUserConnections = async (req, res) => {
 
       const connectionsWithPresence = connections.map((connection) => ({
          ...connection.toObject(),
-         presence: presenceMap[connection._id.toString()] || { isOnline: false, lastSeen: null },
+         presence: presenceMap[connection._id.toString()] || { isOnline: false, lastSeen: connection.lastSeen || null },
       }))
 
       const pendingConnections = (await Connection.find({ to_user_id: userId, status: 'pending' }).populate('from_user_id')).map(connection => connection.from_user_id)
 
       res.json({ success: true, connections: connectionsWithPresence, followers, following, pendingConnections })
 
+   } catch (error) {
+      console.log(error)
+      res.json({ success: false, message: error.message })
+   }
+}
+
+export const getUserPresence = async (req, res) => {
+   try {
+      const { id } = req.params
+      if (!id) {
+         return res.status(400).json({ success: false, message: 'User id is required' })
+      }
+
+      const presenceMap = await getPresenceMap([id])
+      const presenceFromRedis = presenceMap[id]
+      const user = !presenceFromRedis ? await User.findById(id).select('lastSeen') : null
+      const presence = presenceFromRedis || {
+         isOnline: false,
+         lastSeen: user?.lastSeen || null,
+      }
+
+      res.json({ success: true, presence })
    } catch (error) {
       console.log(error)
       res.json({ success: false, message: error.message })
