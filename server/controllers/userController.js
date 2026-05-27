@@ -5,6 +5,7 @@ import { clerkClient } from "@clerk/express"
 import Post from "../models/Post.js"
 import fs from 'fs'
 import { inngest } from "../inngest/index.js";
+import { deleteFeedCacheForUser, getPresenceMap } from '../utils/redisStore.js'
 
 
 // Get user data using userId
@@ -159,6 +160,11 @@ export const followUser = async (req, res) => {
       toUser.followers.push(userId);
       await toUser.save();
 
+      await Promise.all([
+         deleteFeedCacheForUser(userId),
+         deleteFeedCacheForUser(id),
+      ])
+
       res.json({ success: true, message: "Now You are following this user" })
 
    } catch (error) {
@@ -182,6 +188,11 @@ export const unfollowUser = async (req, res) => {
       const toUser = await User.findById(id);
       toUser.followers = toUser.followers.filter(user => user != userId);
       await toUser.save();
+
+      await Promise.all([
+         deleteFeedCacheForUser(userId),
+         deleteFeedCacheForUser(id),
+      ])
 
       res.json({ success: true, message: "You are no longer following this user" })
 
@@ -252,10 +263,17 @@ export const getUserConnections = async (req, res) => {
       const connections = user.connections
       const followers = user.followers
       const following = user.following
+      const connectionIds = connections.map((connection) => connection._id.toString())
+      const presenceMap = await getPresenceMap(connectionIds)
+
+      const connectionsWithPresence = connections.map((connection) => ({
+         ...connection.toObject(),
+         presence: presenceMap[connection._id.toString()] || { isOnline: false, lastSeen: null },
+      }))
 
       const pendingConnections = (await Connection.find({ to_user_id: userId, status: 'pending' }).populate('from_user_id')).map(connection => connection.from_user_id)
 
-      res.json({ success: true, connections, followers, following, pendingConnections })
+      res.json({ success: true, connections: connectionsWithPresence, followers, following, pendingConnections })
 
    } catch (error) {
       console.log(error)
@@ -283,6 +301,11 @@ export const acceptConnectionRequest = async (req, res) => {
 
       connection.status = 'accepted';
       await connection.save()
+
+      await Promise.all([
+         deleteFeedCacheForUser(userId),
+         deleteFeedCacheForUser(id),
+      ])
 
       res.json({ success: true, message: "Connection accepted successfully" })
 
@@ -343,6 +366,11 @@ export const deleteConnection = async (req, res) => {
             { from_user_id: id, to_user_id: userId, status: 'accepted' }
          ]
       });
+
+      await Promise.all([
+         deleteFeedCacheForUser(userId),
+         deleteFeedCacheForUser(id),
+      ])
 
       res.json({ success: true, message: "Connection removed successfully" })
 

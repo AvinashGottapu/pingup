@@ -1,11 +1,14 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+import redis.asyncio as redis
 from services.ml_service import check_toxicity
+import time
+from uuid import uuid4
 
 load_dotenv()
 
@@ -28,6 +31,8 @@ if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY not found")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+REDIS_URL = os.getenv("REDIS_URL")
+redis_client = redis.from_url(REDIS_URL, decode_responses=True) if REDIS_URL else None
 
 SYSTEM_INSTRUCTION = """
 You are PingUp AI, an intelligent assistant integrated inside a modern social media application.
@@ -35,6 +40,57 @@ You are PingUp AI, an intelligent assistant integrated inside a modern social me
 - Be helpful, concise, and friendly.
 - Do not mention backend or model providers.
 """
+
+async def check_rate_limit(identifier: str, limit: int, window_seconds: int):
+    if not redis_client:
+        return {"allowed": True, "ttl": 0}
+
+    try:
+        now_ms = int(time.time() * 1000)
+        window_ms = window_seconds * 1000
+        member = f"{now_ms}-{uuid4().hex}"
+
+        result = await redis_client.eval(
+            """
+            local now = tonumber(ARGV[1])
+            local window_ms = tonumber(ARGV[2])
+            local member = ARGV[3]
+            local cutoff = now - window_ms
+
+            redis.call('zadd', KEYS[1], now, member)
+            redis.call('zremrangebyscore', KEYS[1], '-inf', cutoff)
+
+            local current = redis.call('zcard', KEYS[1])
+            local oldest = redis.call('zrange', KEYS[1], 0, 0, 'WITHSCORES')
+            local ttl = 0
+
+            if #oldest > 0 then
+              local oldest_score = tonumber(oldest[2])
+              ttl = math.max(0, math.ceil((oldest_score + window_ms - now) / 1000))
+            end
+
+            redis.call('expire', KEYS[1], tonumber(ARGV[4]))
+            return { current, ttl }
+            """,
+            1,
+            identifier,
+            now_ms,
+            window_ms,
+            member,
+            window_seconds,
+        )
+
+        current_count = int(result[0])
+        ttl = max(int(result[1]), 0)
+
+        return {
+            "allowed": current_count <= limit,
+            "ttl": ttl,
+            "remaining": max(0, limit - current_count),
+        }
+    except Exception:
+        return {"allowed": True, "ttl": 0}
+
 
 def get_direct_reply(user_message: str):
     msg = user_message.strip().lower()
@@ -64,18 +120,30 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: Request, payload: ChatRequest):
     try:
+        user_identifier = request.headers.get("x-user-id") or (request.client.host if request.client else "anonymous")
+        rate_limit = await check_rate_limit(f"rate:ai:{user_identifier}", 5, 60)
+
+        if not rate_limit["allowed"]:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "message": "Too many AI requests. Please wait a minute before trying again.",
+                    "retryAfter": rate_limit["ttl"],
+                },
+            )
+
         conversation = ""
         user_input = ""
 
-        for msg in request.messages:
+        for msg in payload.messages:
             if msg.role == "user":
                 conversation += f"User: {msg.text}\n"
                 user_input = msg.text
             else:
                 conversation += f"Assistant: {msg.text}\n"
-        
+
         direct_reply = get_direct_reply(user_input)
 
         if direct_reply:
@@ -90,6 +158,8 @@ async def chat_endpoint(request: ChatRequest):
 
         return {"response": response.text}
 
+    except HTTPException:
+        raise
     except Exception as e:
         print("Error:", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -98,10 +168,23 @@ async def chat_endpoint(request: ChatRequest):
 
 @app.post("/api/photo-magic")
 async def photo_magic_endpoint(
+    request: Request,
     type: str = Form(...),
     image: UploadFile = File(...)
 ):
     try:
+        user_identifier = request.headers.get("x-user-id") or (request.client.host if request.client else "anonymous")    ## Redis-based rate limiting..
+        rate_limit = await check_rate_limit(f"rate:ai:{user_identifier}", 5, 60)
+
+        if not rate_limit["allowed"]:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "message": "Too many AI requests. Please wait a minute before trying again.",
+                    "retryAfter": rate_limit["ttl"],
+                },
+            )
+
         image_bytes = await image.read()
 
         if not image_bytes:

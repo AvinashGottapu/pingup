@@ -3,3 +3,4 @@ uvicorn
 python-dotenv
 google-genai
 python-multipart
+redis

@@ -4,6 +4,7 @@ import imagekit from "../configs/imageKit.js";
 import Post from "../models/Post.js";
 import Comment from "../models/Comment.js";
 import User from "../models/User.js";
+import { checkRateLimit, deleteFeedCacheForUser, getFeedCache, incrementCounter, setFeedCache } from '../utils/redisStore.js'
 
 const FEED_LIMIT = 10;
 const COMMENTS_LIMIT = 10;
@@ -69,6 +70,7 @@ const getPaginatedComments = async (postId, cursor, limit) => {
       },
     ];
   }
+  
 
   const comments = await Comment.find({ post_id: postId, ...cursorFilter })
     .populate("user", "full_name username profile_picture")
@@ -136,6 +138,12 @@ export const addPost = async (req, res) => {
       post_type,
     });
 
+    const user = await User.findById(userId)
+    const impactedUsers = [...new Set([userId, ...(user?.connections || []), ...(user?.following || [])])]
+    // Why Set ??  Because duplicates may exist.
+    await Promise.all(impactedUsers.map((impactUserId) => deleteFeedCacheForUser(impactUserId)))
+    await incrementCounter('posts.created')  // Useful for analytics... Total counts...
+
     res.json({
       success: true,
       message: "Post Created Successfully",
@@ -154,11 +162,19 @@ export const getFeedPosts = async (req, res) => {
   try {
     const { userId } = req.auth();
 
-    const user = await User.findById(userId);
-
     const cursor = req.query.cursor;
     const limit = Math.min(Number(req.query.limit) || FEED_LIMIT, FEED_LIMIT);
+    const cacheKey = `feed:${userId}:${cursor || 'start'}:${limit}`
+    const cachedResponse = await getFeedCache(cacheKey) // Redis may contain.. feed:user123:page:1.. and some value...
 
+    if (cachedResponse) {
+      await incrementCounter('feed.cache_hits')
+      return res.json({ success: true, ...cachedResponse })
+    }
+
+    await incrementCounter('feed.cache_misses')
+
+    const user = await User.findById(userId);
     const userIds = [userId, ...user.connections, ...user.following];
 
     const cursorFilter = buildCursorFilter(cursor);
@@ -205,11 +221,17 @@ export const getFeedPosts = async (req, res) => {
           ]._id.toString()}`
         : null;
 
-    res.json({
-      success: true,
+    const responsePayload = {
       posts: formattedPosts,
       nextCursor,
       hasMore,
+    }
+
+    await setFeedCache(cacheKey, responsePayload) 
+
+    res.json({
+      success: true,
+      ...responsePayload,
     });
   } catch (error) {
     console.log(error);
@@ -265,6 +287,16 @@ export const addComment = async (req, res) => {
         success: false,
         message: "Comment cannot be empty.",
       });
+    }
+
+    const rateLimit = await checkRateLimit(`rate:comment:${userId}`, 5, 20)
+
+    if (rateLimit && !rateLimit.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: 'Too many comments. Please wait 20 seconds before commenting again.',
+        retryAfter: rateLimit.ttl,
+      })
     }
 
     const post = await Post.findById(postId);

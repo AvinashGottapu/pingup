@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import imagekit from '../configs/imageKit.js'
 import Message from '../models/Message.js'
 import { emitToUser, isUserOnline } from '../socketManager.js'
+import { checkRateLimit, incrementCounter } from '../utils/redisStore.js'
 
 const MESSAGE_LIMIT = 25
 
@@ -65,6 +66,16 @@ export const sendMessage = async (req, res) => {
     const { to_user_id, text } = req.body
     const image = req.file
 
+    const rateLimit = await checkRateLimit(`rate:message:${userId}`, 20, 60)
+
+    if (rateLimit && !rateLimit.allowed) {
+      return res.status(429).json({
+  success: false,
+  message: 'Too many messages. Please wait a minute before sending more.',
+  retryAfter: rateLimit.ttl,
+})
+    }
+
     let media_url = ''
     const message_type = image ? 'image' : 'text'
 
@@ -96,6 +107,7 @@ export const sendMessage = async (req, res) => {
     const messageWithUserData = await Message.findById(message._id).populate('from_user_id')
     const normalizedMessage = normalizeMessagePayload(messageWithUserData)
 
+    await incrementCounter('messages.sent')
     res.json({ success: true, message: normalizedMessage })
 
     emitToUser(to_user_id, 'message:new', {
@@ -248,6 +260,7 @@ export const deleteMessage = async (req, res) => {
     }
 
     await Message.findByIdAndDelete(messageId)
+    await incrementCounter('messages.deleted')
 
     const targets = new Set([
       message.from_user_id?.toString(),
