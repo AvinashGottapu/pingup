@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import redis.asyncio as redis
-from services.ml_service import check_toxicity
 import time
 from uuid import uuid4
 
@@ -220,16 +219,6 @@ async def photo_magic_endpoint(
 
 
 class ToxicityRequest(BaseModel):
-    comment: str
-
-@app.post("/api/check-toxicity")
-def toxicity(data: ToxicityRequest):
-
-    result = check_toxicity(data.comment)
-
-    return {
-        "toxicity": result
-    }
 
 
 class ExplainRequest(BaseModel):
