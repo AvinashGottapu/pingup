@@ -50,6 +50,24 @@ const StoryViewer = ({ viewStory, setViewStory, fetchStories }) => {
       setProgress(0);
    }, [currentIndex, viewStory]); // Reset on story change
 
+   // Mark current story segment as seen
+   useEffect(() => {
+      if (currentStory && currentUser?._id && (!currentStory.view_count || !currentStory.view_count.includes(currentUser._id))) {
+         const markAsSeen = async () => {
+            try {
+               const token = await getToken();
+               await api.post(`/api/story/view/${currentStory._id}`, {}, {
+                  headers: { Authorization: `Bearer ${token}` }
+               });
+               await fetchStories();
+            } catch (error) {
+               console.error("Failed to mark story as seen:", error);
+            }
+         };
+         markAsSeen();
+      }
+   }, [currentStory, currentUser, getToken, fetchStories]);
+
    // Timer for progress
    useEffect(() => {
       let progressInterval;

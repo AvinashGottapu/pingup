@@ -116,3 +116,28 @@ export const deleteStory = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 };
+
+// Mark story item as viewed by user
+export const viewStoryItem = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { storyId } = req.params;
+
+        // Find user story that contains the specific story item ID, add user to its view_count array
+        const result = await Story.findOneAndUpdate(
+            { "stories._id": storyId },
+            { $addToSet: { "stories.$.view_count": userId } },
+            { new: true }
+        );
+
+        if (!result) {
+            return res.json({ success: false, message: "Story item not found" });
+        }
+
+        res.json({ success: true, message: "Story marked as viewed successfully" });
+
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+};

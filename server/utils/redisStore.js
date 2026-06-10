@@ -129,6 +129,8 @@ export const deleteSession = async (userId) => {
 }
 
 
+const ONLINE_SOCKET_TTL = 24 * 60 * 60 // 24 hours
+
 export const registerOnlineUser = async (userId, socketId) => {
   if (!userId) return false
 
@@ -137,8 +139,7 @@ export const registerOnlineUser = async (userId, socketId) => {
     await redis.sadd(key, userId)
     await redis.hset(`online:socket:${userId}`, socketId, Date.now().toString()) 
     // Diff tabs..  user1 may be connected from: - Chrome tab - Mobile app - Another laptop...
-        //  "socketA":"1712345678900", "socketB": "1712345680000"
-    await redis.expire(`online:socket:${userId}`, SESSION_TTL)
+    await redis.expire(`online:socket:${userId}`, ONLINE_SOCKET_TTL)
     return true
   })
 }
@@ -156,7 +157,7 @@ export const unregisterOnlineUser = async (userId, socketId) => {
       await redis.srem('online:users', userId)  // SET REMOVE... 
       await redis.del(`online:socket:${userId}`)  // DELETE ENTIRE KEY...
     } else {
-      await redis.expire(`online:socket:${userId}`, SESSION_TTL)
+      await redis.expire(`online:socket:${userId}`, ONLINE_SOCKET_TTL)
     }
 
     return true
@@ -165,20 +166,49 @@ export const unregisterOnlineUser = async (userId, socketId) => {
 
 export const getOnlineUsers = async () => {
   return withRedis(async () => {
-    return redis.smembers('online:users') // Returns an array of userIds currently online
+    const users = await redis.smembers('online:users')
+    if (!users || users.length === 0) return []
+
+    // Verify which users actually have active socket registrations
+    const pipeline = redis.pipeline()
+    users.forEach((userId) => {
+      pipeline.exists(`online:socket:${userId}`)
+    })
+    const results = await pipeline.exec()
+
+    const activeUsers = []
+    const inactiveUsers = []
+
+    users.forEach((userId, index) => {
+      const exists = results[index]?.[1] === 1
+      if (exists) {
+        activeUsers.push(userId)
+      } else {
+        inactiveUsers.push(userId)
+      }
+    })
+
+    if (inactiveUsers.length > 0) {
+      // Clean up stale users from 'online:users' in the background
+      redis.srem('online:users', ...inactiveUsers).catch((err) => {
+        console.warn('[Redis] failed to remove stale online users:', err.message)
+      })
+    }
+
+    return activeUsers
   })
 }
 
 export const getPresenceMap = async (userIds = []) => {
   if (!userIds.length) return {}
 
-  return withRedis(async () => {
-    const [onlineUsers, ...sessions] = await Promise.all([
-      redis.smembers('online:users'),
-      ...userIds.map((userId) => redis.hgetall(`session:${userId}`)),
-    ])
-
+  const result = await withRedis(async () => {
+    const onlineUsers = await getOnlineUsers()
     const onlineSet = new Set(onlineUsers || [])
+
+    const sessions = await Promise.all(
+      userIds.map((userId) => redis.hgetall(`session:${userId}`))
+    )
 
     return userIds.reduce((acc, userId, index) => {
       const session = sessions[index] || {}
@@ -189,6 +219,14 @@ export const getPresenceMap = async (userIds = []) => {
       return acc
     }, {})
   })
+
+  return result || userIds.reduce((acc, userId) => {
+    acc[userId] = {
+      isOnline: false,
+      lastSeen: null,
+    }
+    return acc
+  }, {})
 }
 
 export const getOnlineCount = async () => {

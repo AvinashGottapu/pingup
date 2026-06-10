@@ -516,3 +516,93 @@ export const getPostComments = async (req, res) => {
     });
   }
 };
+
+export const deletePost = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { postId } = req.body;
+
+    const post = await Post.findById(postId);
+
+    if (!post) {
+      return res.json({
+        success: false,
+        message: "Post not found.",
+      });
+    }
+
+    if (post.user.toString() !== userId) {
+      return res.json({
+        success: false,
+        message: "You can only delete your own posts.",
+      });
+    }
+
+    // Delete associated comments
+    await Comment.deleteMany({ post_id: postId });
+
+    // Delete the post
+    await Post.deleteOne({ _id: postId });
+
+    // Invalidate caches
+    const user = await User.findById(userId);
+    const impactedUsers = [...new Set([userId, ...(user?.connections || []), ...(user?.following || [])])];
+    await Promise.all(impactedUsers.map((impactUserId) => deleteFeedCacheForUser(impactUserId)));
+
+    await incrementCounter('posts.deleted');
+
+    res.json({
+      success: true,
+      message: "Post deleted successfully.",
+    });
+  } catch (error) {
+    console.log(error);
+    res.json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const editPost = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { postId, content } = req.body;
+
+    const post = await Post.findById(postId);
+
+    if (!post) {
+      return res.json({
+        success: false,
+        message: "Post not found.",
+      });
+    }
+
+    if (post.user.toString() !== userId) {
+      return res.json({
+        success: false,
+        message: "You can only edit your own posts.",
+      });
+    }
+
+    post.content = content.trim();
+    await post.save();
+
+    // Invalidate caches
+    const user = await User.findById(userId);
+    const impactedUsers = [...new Set([userId, ...(user?.connections || []), ...(user?.following || [])])];
+    await Promise.all(impactedUsers.map((impactUserId) => deleteFeedCacheForUser(impactUserId)));
+
+    res.json({
+      success: true,
+      message: "Post updated successfully.",
+      post,
+    });
+  } catch (error) {
+    console.log(error);
+    res.json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

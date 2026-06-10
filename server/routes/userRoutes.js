@@ -17,7 +17,7 @@ userRouter.post('/reject', protect, rejectConnectionRequest);
 userRouter.post('/remove-connection', protect, deleteConnection);
 userRouter.get('/connections', protect, getUserConnections);
 userRouter.get('/presence/:id', protect, getUserPresence);
-userRouter.post('/profiles', getUserProfiles);
+userRouter.post('/profiles', protect, getUserProfiles);
 userRouter.get('/recent-messages', protect, getUserRecentMessages);
 
 export default userRouter

@@ -9,6 +9,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useSelector } from "react-redux";
 import { toast } from "react-hot-toast";
 import api from "../api/axios";
+import { Grid, Image as ImageIcon, Sparkles } from "lucide-react";
 
 const Profile = () => {
   const currentUser = useSelector((state) => state.user.value);
@@ -55,12 +56,14 @@ const Profile = () => {
   }, [profileId, currentUser]);
 
   return user ? (
-    <div className="relative h-full overflow-y-scroll bg-gray-50 dark:bg-slate-950 p-6">
-      <div className="max-w-3xl mx-auto">
-        {/* Profile Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow overflow-hidden">
-          {/* Cover Photo  */}
-          <div className="h-40 md:h-56 bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200">
+    <div className="relative h-full overflow-y-scroll bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 no-scrollbar pb-16">
+      <div className="max-w-3xl mx-auto space-y-6">
+        
+        {/* Cover Photo & User Info Card */}
+        <div className="bg-white dark:bg-zinc-900/40 rounded-3xl overflow-hidden shadow-xl border border-slate-200/50 dark:border-zinc-900/40 backdrop-blur-md">
+          {/* Cover Photo */}
+          <div className="h-40 md:h-52 bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 relative">
+            <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] opacity-10"></div>
             {user.cover_photo && (
               <img
                 src={user.cover_photo}
@@ -69,7 +72,8 @@ const Profile = () => {
               />
             )}
           </div>
-          {/* User Info */}
+          
+          {/* User Info details */}
           <UserProfileInfo
             user={user}
             posts={posts}
@@ -77,59 +81,89 @@ const Profile = () => {
             setShowEdit={setShowEdit}
           />
         </div>
-        {/* Tabs */}
-        <div className="mt-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow p-1 flex max-w-md mx-auto">
-            {["posts", "media"].map((tab) => (
-              <button
-                onClick={() => setActiveTab(tab)}
-                key={tab}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${activeTab === tab
-                    ? "bg-indigo-600 text-white dark:text-white"
-                    : "text-gray-600  dark:text-white"
+
+        {/* Navigation Tabs (Instagram style) */}
+        <div className="space-y-6">
+          <div className="flex border-b border-slate-200 dark:border-zinc-900 justify-center gap-12">
+            {[
+              { id: "posts", label: "Posts", icon: Grid },
+              { id: "media", label: "Media", icon: ImageIcon }
+            ].map((tab) => {
+              const TabIcon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`pb-3.5 px-4 font-extrabold text-xs transition-all border-b-2 flex items-center gap-2 cursor-pointer uppercase tracking-wider ${
+                    isSelected
+                      ? "border-indigo-600 dark:border-purple-400 text-indigo-600 dark:text-purple-400"
+                      : "border-transparent text-gray-400 dark:text-zinc-550 hover:text-gray-650"
                   }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
+                >
+                  <TabIcon className="w-4 h-4" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
-          {/* Posts */}
+
+          {/* Posts Tab Content */}
           {activeTab === "posts" && (
-            <div className="mt-6 flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-5">
               {posts.map((post) => (
-                <PostCard key={post._id} post={post} />
+                <PostCard 
+                  key={post._id} 
+                  post={post} 
+                  onDeletePost={(postId) => setPosts((prev) => prev.filter((p) => p._id !== postId))}
+                  onUpdatePost={(updatedPost) => setPosts((prev) => prev.map((p) => p._id === updatedPost._id ? { ...p, ...updatedPost } : p))}
+                />
               ))}
+              {posts.length === 0 && (
+                <div className="bg-zinc-900/10 dark:bg-zinc-900/20 border border-slate-200/40 dark:border-zinc-900/40 rounded-3xl p-12 text-center space-y-3 w-full max-w-xl">
+                  <Grid className="w-8 h-8 mx-auto text-zinc-650" />
+                  <h4 className="text-sm font-bold text-slate-700 dark:text-zinc-350">No Posts Yet</h4>
+                  <p className="text-slate-500 dark:text-zinc-550 text-[10px] font-semibold max-w-xs mx-auto">Share updates, photos, or thoughts to start posting on feed card grids.</p>
+                </div>
+              )}
             </div>
           )}
-          {/* Media */}
+
+          {/* Media Tab Content */}
           {activeTab === "media" && (
-            <div className="mt-6 max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               {posts
-                .filter((post) => post.image_urls.length > 0)
+                .filter((post) => post.image_urls?.length > 0)
                 .map((post) =>
                   post.image_urls.map((image, index) => (
                     <Link
                       target="_blank"
                       to={image}
                       key={`${post._id}-${index}`}
-                      className="relative group"
+                      className="relative group overflow-hidden rounded-2xl border border-slate-200/60 dark:border-zinc-900/60 aspect-square bg-slate-100 dark:bg-zinc-950 flex items-center justify-center shadow-sm hover:shadow-md hover:scale-[1.01] transition-all"
                     >
-                      <div className="w-full aspect-square bg-gray-100 border border-gray-200 rounded-xl overflow-hidden flex items-center justify-center">
-                        <img
-                          src={image}
-                          alt=""
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
+                      <img
+                        src={image}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
 
-                      <p
-                        className="absolute bottom-0 right-0 text-xs p-1 px-3 bg-black/70 text-white opacity-0 group-hover:opacity-100 transition duration-300"
-                      >
-                        Posted {moment(post.createdAt).fromNow()}
-                      </p>
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-300">
+                        <span className="text-[10px] font-black uppercase text-white tracking-widest bg-zinc-950/80 px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
+                          {moment(post.createdAt).fromNow()}
+                        </span>
+                      </div>
                     </Link>
                   ))
                 )}
+              {posts.filter((post) => post.image_urls?.length > 0).length === 0 && (
+                <div className="bg-zinc-900/10 dark:bg-zinc-900/20 border border-slate-200/40 dark:border-zinc-900/40 rounded-3xl p-12 text-center space-y-3 col-span-3">
+                  <ImageIcon className="w-8 h-8 mx-auto text-zinc-650" />
+                  <h4 className="text-sm font-bold text-slate-700 dark:text-zinc-350">No Media Yet</h4>
+                  <p className="text-slate-500 dark:text-zinc-550 text-[10px] font-semibold max-w-xs mx-auto text-center">Images you attach in feed posts will be showcased here.</p>
+                </div>
+              )}
             </div>
           )}
 

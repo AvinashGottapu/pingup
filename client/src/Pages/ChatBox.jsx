@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ImageIcon, SendHorizonal, Phone, X, Mic } from "lucide-react";
+import { ImageIcon, SendHorizonal, Phone, X, Mic, CheckCircle2, Sparkles } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { useAuth } from "@clerk/clerk-react";
@@ -13,6 +13,7 @@ import {
   deleteMessage,
 } from "../features/messages/messagesSlice.js";
 import { createSocket } from "../api/socket";
+import PingBuddyModal from "../components/PingBuddyModal";
 
 const ChatBox = () => {
   const { messages } = useSelector((state) => state.messages);
@@ -23,6 +24,10 @@ const ChatBox = () => {
   const [isListening, setIsListening] = useState(false);
   const [text, setText] = useState("");
   const [image, setImage] = useState(null);
+
+  // PingBuddy modal states
+  const [showBuddyModal, setShowBuddyModal] = useState(false);
+  const [buddyPrompt, setBuddyPrompt] = useState("");
   const [user, setUser] = useState(null);
   const [useAzure, setUseAzure] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -167,7 +172,7 @@ const ChatBox = () => {
       scrollToBottom(100);
       scrollToBottom(300);
     });
-  }, [messages, isInitialLoading]);
+  }, [messages, isInitialLoading, user]);
 
   useEffect(() => {
     if (!messagesContainerRef.current || !topSentinelRef.current) return;
@@ -192,7 +197,7 @@ const ChatBox = () => {
     observer.observe(topSentinelRef.current);
 
     return () => observer.disconnect();
-  }, [hasMore, isLoadingOlder, isInitialLoading, nextCursor, userId]);
+  }, [hasMore, isLoadingOlder, isInitialLoading, nextCursor, userId, user]);
 
   useEffect(() => {
     if (connections.length > 0) {
@@ -209,7 +214,6 @@ const ChatBox = () => {
 
   useEffect(() => {
     if (!userId) return; 
-    // After reload, frontend starts fresh. It does not know.. so use this state...
     fetchPeerPresence();
   }, [userId]);
 
@@ -251,6 +255,9 @@ const ChatBox = () => {
       socket.on("typing:start", handleTypingStart);
       socket.on("typing:stop", handleTypingStop);
       socket.on("presence:update", handlePresenceUpdate);
+
+      // Emit messages:seen to mark conversation read on mount / switch
+      socket.emit("messages:seen", { to_user_id: userId });
     };
 
     setupTypingSocket();
@@ -292,6 +299,16 @@ const ChatBox = () => {
       const messageText = text.trim();
 
       if (!messageText && !image) return;
+
+      if (messageText.includes('@buddy')) {
+        const regex = /@buddy\s*(.*)/i;
+        const match = messageText.match(regex);
+        const prompt = match && match[1] ? match[1].trim() : messageText.replace(/@buddy/g, '').trim();
+        setBuddyPrompt(prompt);
+        setShowBuddyModal(true);
+        setText("");
+        return;
+      }
 
       emitTypingStatus(false);
       clearTimeout(typingTimerRef.current);
@@ -359,53 +376,53 @@ const ChatBox = () => {
 
   return (
     user && (
-      <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <div className="relative z-10 flex items-center gap-3 px-4 py-3 md:px-8 md:gap-4 md:py-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-lg shadow-slate-200/50 dark:shadow-slate-950/50">
-          <div className="relative flex-shrink-0">
-            <img
-              src={user.profile_picture}
-              alt={user.full_name}
-              className="size-10 md:size-11 rounded-full ring-2 ring-indigo-500/20 dark:ring-indigo-400/20 object-cover"
-            />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm md:text-base text-slate-900 dark:text-white truncate">
-              {user.full_name}
-            </p>
-
-            {!isPeerTyping && (
-              <p
-                className={`text-[11px] flex items-center gap-1 ${
-                  peerPresence?.isOnline
-                    ? "text-emerald-500 dark:text-emerald-300"
-                    : "text-slate-500 dark:text-slate-300"
-                }`}
-              >
-                <span
-                  className={`size-2 rounded-full ${
-                    peerPresence?.isOnline
-                      ? "bg-emerald-500 animate-pulse"
-                      : "bg-slate-400"
-                  }`}
+      <div className="flex flex-col h-[calc(100dvh-7.5rem)] sm:h-screen bg-slate-50 dark:bg-zinc-950 transition-colors duration-300 relative overflow-hidden">
+        
+        {/* Subtle grid wallpaper backdrop */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none opacity-45"></div>
+        
+        {/* 1. Header Area */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-md border-b border-slate-200/60 dark:border-zinc-900/60 shadow-sm z-20">
+          <div className="flex items-center gap-3">
+            {/* Avatar bubble */}
+            <div className="relative flex-shrink-0">
+              <div className="w-10 h-10 rounded-full p-0.5 bg-gradient-to-tr from-indigo-500 to-pink-500 shadow">
+                <img
+                  src={user.profile_picture || 'https://images.clerk.dev/static/profile.png'}
+                  alt={user.full_name}
+                  className="w-full h-full rounded-full object-cover border-2 border-white dark:border-zinc-950 bg-zinc-900"
                 />
-                {peerPresence?.isOnline
-                  ? "Online"
-                  : formatLastSeen(peerPresence?.lastSeen)}
-              </p>
-            )}
+              </div>
+              <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-950 ${
+                peerPresence?.isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+              }`} />
+            </div>
 
-            {isPeerTyping && (
-              <p className="text-[11px] text-indigo-500 dark:text-indigo-300">
-                typing...
+            <div className="flex flex-col text-left min-w-0">
+              <p className="font-extrabold text-sm text-slate-800 dark:text-zinc-200 truncate">
+                {user.full_name}
               </p>
-            )}
+              
+              {!isPeerTyping && (
+                <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-550">
+                  {peerPresence?.isOnline
+                    ? "Online"
+                    : formatLastSeen(user.lastSeen)}
+                </p>
+              )}
+
+              {isPeerTyping && (
+                <p className="text-[10px] text-pink-500 dark:text-pink-400 font-black animate-pulse">
+                  typing...
+                </p>
+              )}
+            </div>
           </div>
 
+          {/* Calling Action Button */}
           <button
             onClick={async () => {
               const roomId = [currentUser._id, user._id].sort().join("-");
-
               try {
                 const token = await getToken();
                 const socket = createSocket(token);
@@ -422,7 +439,6 @@ const ChatBox = () => {
                       navigate(`/room/${roomId}`);
                       return;
                     }
-
                     toast.error(response?.message || "User is not available");
                   }
                 );
@@ -430,22 +446,24 @@ const ChatBox = () => {
                 toast.error("Could not notify user of call");
               }
             }}
-            className="flex-shrink-0 p-2 md:p-2.5 max-sm:mr-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white transition-all duration-200 hover:shadow-lg active:scale-95"
+            className="p-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-blue-500 hover:from-pink-600 hover:to-blue-600 text-white transition-all hover:scale-105 cursor-pointer shadow-md shadow-pink-500/20 border-0"
+            title="Start Audio/Video Call"
           >
-            <Phone className="size-[18px] md:size-[20px]" />
+            <Phone className="w-4.5 h-4.5 stroke-[2.5]" />
           </button>
         </div>
 
+        {/* 2. Messages List timeline */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 md:px-8 py-4 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent"
+          className="flex-1 overflow-y-auto px-4 py-4 md:px-8 space-y-4 no-scrollbar z-10"
         >
-          <div className="space-y-3 max-w-4xl w-full mx-auto pb-2">
+          <div className="space-y-3.5 max-w-2xl w-full mx-auto pb-4">
             <div ref={topSentinelRef} className="h-1" />
 
             {isLoadingOlder && (
               <div className="flex justify-center py-2">
-                <div className="w-6 h-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                <div className="w-5 h-5 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
               </div>
             )}
 
@@ -459,11 +477,11 @@ const ChatBox = () => {
                 return (
                   <div
                     key={message._id}
-                    className={`flex ${
-                      isSentByMe ? "justify-end" : "justify-start"
-                    }`}
+                    className={`flex ${isSentByMe ? "justify-end" : "justify-start"} animate-message-in`}
                   >
-                    <div className="flex flex-col gap-0.5 max-w-[75%] md:max-w-[65%]">
+                    <div className="flex flex-col gap-0.5 max-w-[78%] sm:max-w-[65%]">
+                      
+                      {/* Bubble */}
                       <div
                         onClick={() => {
                           if (message.from_user_id === currentUser._id) {
@@ -472,50 +490,48 @@ const ChatBox = () => {
                             );
                           }
                         }}
-                        className={`px-3 py-2 rounded-2xl shadow-md transition-all duration-200 ${
+                        className={`px-3.5 py-2.5 rounded-2xl shadow-sm transition-all text-left ${
                           isSentByMe
-                            ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-br-sm hover:shadow-lg hover:shadow-indigo-500/25 cursor-pointer"
-                            : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-sm border border-slate-200/50 dark:border-slate-700/50"
+                            ? "bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white rounded-br-sm shadow-indigo-500/10 cursor-pointer"
+                            : "bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-200 rounded-bl-sm border border-slate-200/40 dark:border-zinc-900/40"
                         }`}
                       >
                         {message.message_type === "image" && (
-                          <img
-                            src={message.media_url}
-                            className="w-full max-w-sm rounded-xl mb-1.5 shadow-sm"
-                            alt="Shared"
-                            onLoad={() => scrollToBottom(50)}
-                          />
+                          <div className="overflow-hidden rounded-xl border border-white/10 mb-1.5 shadow-sm">
+                            <img
+                              src={message.media_url}
+                              className="w-full max-w-sm h-48 object-cover cursor-pointer hover:scale-[1.01] transition-transform"
+                              alt="Shared Media"
+                              onLoad={() => scrollToBottom(50)}
+                            />
+                          </div>
                         )}
 
                         {message.text && (
-                          <p className="text-sm leading-snug break-words">
+                          <p className="text-xs sm:text-sm leading-relaxed break-words font-medium">
                             {message.text}
                           </p>
                         )}
                       </div>
 
+                      {/* Msg actions */}
                       {message.from_user_id === currentUser._id &&
                         activeMsgId === message._id && (
                           <button
-                            className="text-[11px] font-medium bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded-full self-end mt-1 transition-colors active:scale-95"
+                            className="text-[10px] font-black uppercase tracking-wider bg-rose-500/10 border border-rose-500/25 hover:bg-rose-500 hover:text-white text-rose-500 px-3 py-1 rounded-xl self-end mt-1.5 transition-colors cursor-pointer"
                             onClick={async (e) => {
                               e.stopPropagation();
-
                               try {
                                 const token = await getToken();
-
                                 await api.post(
                                   "/api/message/delete",
-                                  {
-                                    messageId: message._id,
-                                  },
+                                  { messageId: message._id },
                                   {
                                     headers: {
                                       Authorization: `Bearer ${token}`,
                                     },
                                   }
                                 );
-
                                 dispatch(deleteMessage(message._id));
                                 toast.success("Message deleted");
                                 setActiveMsgId(null);
@@ -528,19 +544,25 @@ const ChatBox = () => {
                           </button>
                         )}
 
+                      {/* Time and Seen indicator */}
                       {!(
                         message.from_user_id === currentUser._id &&
                         activeMsgId === message._id
                       ) && (
                         <div
-                          className={`text-[10px] text-slate-500 dark:text-slate-400 px-1 ${
-                            isSentByMe ? "text-right" : "text-left"
+                          className={`text-[9px] text-slate-400 dark:text-zinc-650 px-1 font-bold flex items-center gap-1 mt-0.5 ${
+                            isSentByMe ? "justify-end" : "justify-start"
                           }`}
                         >
-                          {new Date(message.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          <span>
+                            {new Date(message.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {isSentByMe && (
+                            <CheckCircle2 className={`w-3 h-3 ${message.seen ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400 dark:text-zinc-700'}`} />
+                          )}
                         </div>
                       )}
                     </div>
@@ -552,13 +574,14 @@ const ChatBox = () => {
           </div>
         </div>
 
-        <div className="px-3 pb-5 pt-2 bg-gradient-to-t from-white/50 to-transparent dark:from-slate-950/50">
-          <div className="flex items-end gap-2 px-4 py-2 bg-white dark:bg-slate-900 w-full max-w-xl mx-auto border border-slate-300 dark:border-slate-700 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/50 rounded-2xl transition-all duration-200 focus-within:border-indigo-500 dark:focus-within:border-indigo-400 focus-within:shadow-2xl focus-within:shadow-indigo-500/20">
+        {/* 3. Text Input area */}
+        <div className="px-4 pb-4 pt-1 z-10">
+          <div className="glass-panel flex items-end gap-2 px-3.5 py-2 bg-white/95 dark:bg-zinc-900/95 w-full max-w-xl mx-auto border border-slate-200/60 dark:border-zinc-850 shadow-lg rounded-2xl transition-all duration-200 focus-within:border-indigo-500 dark:focus-within:border-purple-400 focus-within:shadow-xl">
             <textarea
               ref={textareaRef}
               rows={1}
-              className="flex-1 outline-none text-[13px] text-slate-800 dark:text-white bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500 resize-none overflow-hidden leading-snug py-1.5 max-h-28 self-center"
-              placeholder="Type a message"
+              className="flex-1 outline-none text-xs sm:text-sm text-slate-800 dark:text-zinc-200 bg-transparent placeholder:text-slate-400 dark:placeholder:text-zinc-600 resize-none overflow-hidden leading-relaxed py-1.5 max-h-24 self-center"
+              placeholder="Type a message..."
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -572,45 +595,42 @@ const ChatBox = () => {
                 if (nextText.trim()) {
                   emitTypingStatus(true);
                   clearTimeout(typingTimerRef.current);
-
                   typingTimerRef.current = setTimeout(() => {
                     emitTypingStatus(false);
                   }, 1800);
-
                   return;
                 }
-
                 emitTypingStatus(false);
                 clearTimeout(typingTimerRef.current);
               }}
               value={text}
             />
 
-            <label htmlFor="image" className="flex-shrink-0 cursor-pointer mb-0.5">
+            {/* Media picker indicator */}
+            <label
+              htmlFor="image"
+              className="flex-shrink-0 cursor-pointer mb-0.5 w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-850 transition-colors"
+            >
               {image ? (
-                <div className="relative group">
+                <div className="relative group flex items-center justify-center">
                   <img
                     src={URL.createObjectURL(image)}
                     alt="Preview"
-                    className="h-7 w-7 rounded-lg object-cover ring-2 ring-indigo-500 dark:ring-indigo-400"
+                    className="h-7 w-7 rounded-lg object-cover ring-2 ring-indigo-500 dark:ring-purple-400"
                   />
-
                   <div
                     onClick={(e) => {
                       e.preventDefault();
                       setImage(null);
                     }}
-                    className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-650 text-white rounded-full p-0.5 opacity-90 hover:opacity-100 transition-opacity"
                   >
                     <X size={10} />
                   </div>
                 </div>
               ) : (
-                <div className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                  <ImageIcon className="size-4 text-slate-500 dark:text-slate-400" />
-                </div>
+                <ImageIcon className="w-4.5 h-4.5 text-slate-500 dark:text-zinc-500" />
               )}
-
               <input
                 type="file"
                 id="image"
@@ -620,15 +640,46 @@ const ChatBox = () => {
               />
             </label>
 
+            {/* Ask Buddy Button */}
+            {text.includes('@buddy') && (
+              <button
+                type="button"
+                onClick={() => {
+                  const regex = /@buddy\s*(.*)/i;
+                  const match = text.match(regex);
+                  const prompt = match && match[1] ? match[1].trim() : text.replace(/@buddy/g, '').trim();
+                  setBuddyPrompt(prompt);
+                  setShowBuddyModal(true);
+                  setText("");
+                }}
+                className="flex-shrink-0 mb-0.5 w-9 h-9 flex items-center justify-center bg-gradient-to-tr from-indigo-500 via-purple-650 to-pink-500 text-white rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer shadow border-0 animate-pulse"
+                title="Ask PingBuddy AI"
+              >
+                <Sparkles className="w-4.5 h-4.5 text-white" />
+              </button>
+            )}
+
+            {/* Send Button */}
             <button
               onClick={sendMessage}
               disabled={!text && !image}
-              className="flex-shrink-0 mb-0.5 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-700 dark:disabled:to-slate-600 disabled:cursor-not-allowed text-white p-2 rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/30 active:scale-95 disabled:active:scale-100"
+              className="flex-shrink-0 mb-0.5 w-9 h-9 flex items-center justify-center bg-gradient-to-tr from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:from-slate-200 disabled:to-slate-350 dark:disabled:from-zinc-850 dark:disabled:to-zinc-800 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-200 hover:shadow-lg active:scale-95 disabled:scale-100 cursor-pointer"
             >
-              <SendHorizonal size={15} />
+              <SendHorizonal className="w-4 h-4 -rotate-12" />
             </button>
           </div>
         </div>
+
+        {showBuddyModal && (
+          <PingBuddyModal
+            initialPrompt={buddyPrompt}
+            onClose={() => setShowBuddyModal(false)}
+            onInsert={(text) => {
+              setText(text);
+              setShowBuddyModal(false);
+            }}
+          />
+        )}
       </div>
     )
   );

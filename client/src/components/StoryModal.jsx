@@ -137,11 +137,11 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
               <div className='flex gap-2 mt-4'>  
                      <button onClick={() => {setMode('text'); setMedia(null); setPreviewUrl(null);}} 
                       className={`flex-1 flex items-center justify-center gap-2 p-2 rounded 
-                      ${ mode==='text' ? 'bg-white text-black' : 'bg-zinc-800'}`} > 
+                      ${ mode==='text' ? 'bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 text-white font-bold' : 'bg-zinc-800 text-zinc-350'}`} > 
                         <TextIcon size={18}/> Text
                      </button> 
                      <label className={`flex-1 flex items-center justify-center gap-2 p-2 rounded cursor-pointer
-                        ${mode==='media' ? 'bg-white text-black' : 'bg-zinc-800'}`}>
+                        ${mode==='media' ? 'bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 text-white font-bold' : 'bg-zinc-800 text-zinc-350'}`}>
                         <input type="file" accept='image/*,video/*' className='hidden' 
                         onChange={handleMediaUpload} /> 
                         <Upload size={18}/> Photo/Video

@@ -232,6 +232,50 @@ def toxicity(data: ToxicityRequest):
     }
 
 
+class ExplainRequest(BaseModel):
+    text: str
+    language: str | None = None
+
+@app.post("/api/explain")
+async def explain_endpoint(request: Request, payload: ExplainRequest):
+    try:
+        user_identifier = request.headers.get("x-user-id") or (request.client.host if request.client else "anonymous")
+        rate_limit = await check_rate_limit(f"rate:ai:{user_identifier}", 5, 60)
+
+        if not rate_limit["allowed"]:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "message": "Too many AI requests. Please wait a minute before trying again.",
+                    "retryAfter": rate_limit["ttl"],
+                },
+            )
+
+        target_lang = payload.language.strip() if payload.language else "standard English"
+        prompt = (
+            "You are PingUp AI, an intelligent assistant. "
+            "Analyze the following social media post or comment. Explain any slang, memes, idioms, cultural references, "
+            f"or technical jargon in it in a simple, friendly, and very concise way (1 to 3 sentences max) written in {target_lang}. "
+            f"If there is no slang or jargon, briefly summarize or translate it into {target_lang}. "
+            f"Ensure the entire response explanation is written in {target_lang}. "
+            "Keep it conversational and friendly. Use emojis if appropriate.\n\n"
+            f"Text: \"\"\"{payload.text}\"\"\""
+        )
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        return {"response": response.text}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Error in explain:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/")
 def read_root():
     return {"message": "PingUp AI Backend is running"}

@@ -2,6 +2,7 @@ import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import { verifyToken } from '@clerk/backend'
 import User from './models/User.js'
+import Message from './models/Message.js'
 import { redis, redisSubscriber } from './configs/redis.js'
 import {
   clearTypingStatus,
@@ -27,28 +28,62 @@ let redisAdapter = null
 const getConversationKey = (userA, userB) => [userA, userB].sort().join(':')
 
 const initRedisAdapter = async () => {
-  if (redisAdapter) return redisAdapter   // Reuse existing adapter if already initialized
+  if (redisAdapter) return redisAdapter;
 
   try {
-    await Promise.race([ // Run multiple promises,whichever finishes first wins..
-      Promise.all([redis.connect(), redisSubscriber.connect()]),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connection timeout')), 2000)),
-    ])
+    await Promise.race([
+      Promise.all([
+        redis.connect(),
+        redisSubscriber.connect()
+      ]),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Redis connection timeout')),
+          5000 // Increased timeout
+        )
+      ),
+    ]);
 
-    const ping = await redis.ping()
-    if (ping !== 'PONG') {  // If Redis not responding correctly,throw error..
-      throw new Error('Redis ping failed')
+    const ping = await redis.ping();
+
+    if (ping !== 'PONG') {
+      throw new Error('Redis ping failed');
     }
 
-    redisAdapter = createAdapter(redis, redisSubscriber) // All servers receive socket events
-    return redisAdapter
+    // Clear stale online keys on startup
+    await redis.del('online:users');
+
+    const keys = await redis.keys('online:socket:*');
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+
+    redisAdapter = createAdapter(redis, redisSubscriber);
+
+    console.log('[Redis] Connected successfully');
+
+    return redisAdapter;
   } catch (error) {
-    console.warn('[Redis] unavailable, using in-memory socket adapter:', error.message)
-    redis.disconnect().catch(() => {})
-    redisSubscriber.disconnect().catch(() => {})
-    return null
+    console.warn(
+      '[Redis] unavailable, using in-memory socket adapter:',
+      error.message
+    );
+
+    try {
+      if (redis?.isOpen) {
+        await redis.quit();
+      }
+    } catch (e) {}
+
+    try {
+      if (redisSubscriber?.isOpen) {
+        await redisSubscriber.quit();
+      }
+    } catch (e) {}
+
+    return null;
   }
-}
+};
 
 const broadcastPresenceUpdate = async (userId, isOnline) => {
   const onlineUsers = (await getOnlineUsers()) || []
@@ -139,6 +174,23 @@ export const initSocketServer = async (httpServer) => {
         from_user_id: socket.userId,
         conversationKey,
       })
+    })
+
+    socket.on('messages:seen', async ({ to_user_id }) => {
+      if (!to_user_id) return
+
+      try {
+        await Message.updateMany(
+          { from_user_id: to_user_id, to_user_id: socket.userId, seen: false },
+          { seen: true }
+        )
+
+        emitToUser(to_user_id, 'messages:seen', {
+          from_user_id: socket.userId,
+        })
+      } catch (err) {
+        console.error('Error in messages:seen socket handler:', err)
+      }
     })
 
     socket.on('call:invite', ({ to_user_id, roomId, callerName }, ack) => {

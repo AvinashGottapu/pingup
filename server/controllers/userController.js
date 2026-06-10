@@ -44,7 +44,7 @@ export const getUserData = async (req, res) => {
 export const updateUserData = async (req, res) => {
    try {
       const { userId } = req.auth();
-      let { username, bio, location, full_name, theme } = req.body;
+      let { username, bio, location, full_name, theme, privateFollowers } = req.body;
       // CONST IS NOT USED BECAUSE WE ARE CHANGING THE USERNAME VALUE BELOW..
 
       const tempUser = await User.findById(userId);
@@ -66,7 +66,8 @@ export const updateUserData = async (req, res) => {
          bio,
          location,
          full_name,
-         theme
+         theme,
+         privateFollowers: privateFollowers === 'true' || privateFollowers === true
       }
 
       const profile = req.files?.profile && req.files?.profile[0]
@@ -406,12 +407,25 @@ export const deleteConnection = async (req, res) => {
 // Get User Profiles 
 export const getUserProfiles = async (req, res) => {
    try {
+      const { userId } = req.auth();
       const { profileId } = req.body;
-      const profile = await User.findById(profileId)
+      const rawProfile = await User.findById(profileId);
 
-      if (!profile) {
+      if (!rawProfile) {
          return res.json({ success: false, message: "profile not found" })
       }
+
+      const isOwner = rawProfile._id === userId;
+      let profile;
+
+      if (rawProfile.privateFollowers && !isOwner) {
+         // Return raw profile without populating user objects (protecting privacy)
+         profile = rawProfile;
+      } else {
+         // Populate follower lists
+         profile = await User.findById(profileId).populate('followers following connections');
+      }
+
       const posts = await Post.find({ user: profileId }).populate('user')
       res.json({ success: true, profile, posts })
 

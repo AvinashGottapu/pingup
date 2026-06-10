@@ -7,7 +7,7 @@ const initialState = {
 
 export const fetchMessages = createAsyncThunk(
     'messages/fetchMessages',
-    async ({ token, userId, cursor = null, limit = 25, mode = 'replace' }) => {
+    async ({ token, userId, cursor = null, limit = 15, mode = 'replace' }) => {
         const { data } = await api.post(
             'api/message/get',
             { to_user_id: userId, cursor, limit },
@@ -41,6 +41,15 @@ const messagesSlice = createSlice({
         },
         deleteMessage: (state, action) => {
             state.messages = state.messages.filter(msg => msg._id !== action.payload)
+        },
+        markMessagesAsSeen: (state, action) => {
+            const readerId = action.payload.from_user_id
+            state.messages = state.messages.map((msg) => {
+                if (msg.to_user_id === readerId) {
+                    return { ...msg, seen: true }
+                }
+                return msg
+            })
         }
     },
     extraReducers: (builder) => {
@@ -59,6 +68,6 @@ const messagesSlice = createSlice({
     }
 })
 
-export const { setMessages, addMessages, resetMessages, deleteMessage } = messagesSlice.actions;
+export const { setMessages, addMessages, resetMessages, deleteMessage, markMessagesAsSeen } = messagesSlice.actions;
 
 export default messagesSlice.reducer

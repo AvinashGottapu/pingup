@@ -5,7 +5,7 @@ import Message from '../models/Message.js'
 import { emitToUser, isUserOnline } from '../socketManager.js'
 import { checkRateLimit, incrementCounter } from '../utils/redisStore.js'
 
-const MESSAGE_LIMIT = 25
+const MESSAGE_LIMIT = 15
 
 const normalizeMessagePayload = (message) => {
   const fromUser = message.from_user_id
@@ -146,9 +146,13 @@ export const getChatMessages = async (req, res) => {
     const paginatedMessages = hasMore ? messages.slice(0, pageSize) : messages
 
     await Message.updateMany(
-      { from_user_id: to_user_id, to_user_id: userId },
+      { from_user_id: to_user_id, to_user_id: userId, seen: false },
       { seen: true },
     )
+
+    emitToUser(to_user_id, 'messages:seen', {
+      from_user_id: userId,
+    })
 
     const nextCursor = hasMore
       ? `${paginatedMessages[paginatedMessages.length - 1].createdAt.toISOString()}|${paginatedMessages[paginatedMessages.length - 1]._id.toString()}`

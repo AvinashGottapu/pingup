@@ -8,7 +8,8 @@ const MenuItems = ({ setSidebarOpen }) => {
       {
         menuItemsData.map(({ to, label, Icon }) => (
           <NavLink key={to} to={to} end={to === '/'} onClick={() => setSidebarOpen(false)}
-            className={({ isActive }) => `px-3.5 py-2 flex items-center gap-3 rounded-xl ${isActive ? 'bg-indigo-50 dark:bg-slate-800 text-indigo-500 dark:text-indigo-400' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}   >
+            className={({ isActive }) => `px-3.5 py-2 flex items-center gap-3 rounded-xl ${isActive ? 
+            'scale-[1.1] font-black' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}   >
             <Icon className='w-5 h-5' />
             {label}
           </NavLink>

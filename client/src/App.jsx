@@ -17,7 +17,7 @@ import { toast, Toaster } from 'react-hot-toast'
 import { useDispatch, useSelector } from 'react-redux'
 import { fetchUser } from './features/user/userSlice'
 import { fetchConnections } from './features/connections/connectionsSlice'
-import { addMessages, deleteMessage } from './features/messages/messagesSlice'
+import { addMessages, deleteMessage, markMessagesAsSeen } from './features/messages/messagesSlice'
 import Notification from './components/Notification'
 import Roompage from './calling/Roompage'
 import CallNotification from './components/CallNotification'
@@ -110,6 +110,7 @@ const App = () => {
 
         if (pathnameRef.current === `/messages/${senderId}`) {
           dispatch(addMessages(message))
+          currentSocket.emit('messages:seen', { to_user_id: senderId })
           return
         }
 
@@ -117,6 +118,12 @@ const App = () => {
           (t) => <Notification t={t} message={message} />,
           { position: 'bottom-right' },
         )
+      }
+
+      const handleMessagesSeen = ({ from_user_id }) => {
+        if (pathnameRef.current === `/messages/${from_user_id}`) {
+          dispatch(markMessagesAsSeen({ from_user_id }))
+        }
       }
 
       const handleDeletedMessage = ({ messageId }) => {
@@ -140,6 +147,7 @@ const App = () => {
       }
 
       currentSocket.on('message:new', handleNewMessage)
+      currentSocket.on('messages:seen', handleMessagesSeen)
       currentSocket.on('message:deleted', handleDeletedMessage)
       currentSocket.on('call:incoming', handleIncomingCall)
       currentSocket.on('call:rejected', handleCallRejected)
@@ -153,6 +161,7 @@ const App = () => {
       const socket = getSocket()
       if (socket) {
         socket.off('message:new')
+        socket.off('messages:seen')
         socket.off('message:deleted')
         socket.off('call:incoming')
         socket.off('call:rejected')

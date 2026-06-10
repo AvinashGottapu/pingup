@@ -1,13 +1,141 @@
-@import url('https://fonts.googleapis.com/css2?family=Baloo+Bhai+2&family=Outfit:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+Bhai+2:wght@400..800&family=Outfit:wght@100..900&display=swap');
 
 @import "tailwindcss";
 @variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --color-brand-primary: #6366f1;
+  --color-brand-secondary: #a855f7;
+  --color-brand-pink: #ec4899;
+  --color-zinc-550: #5f5f68;
+  --color-zinc-650: #48484f;
+  --color-zinc-850: #202023;
+  
+  --font-display: "Baloo Bhai 2", cursive;
+  --font-sans: "Outfit", sans-serif;
+}
+
+/* Base resets & styles */
 * {
-    font-family: "Outfit", sans-serif;
+  font-family: "Outfit", sans-serif;
 }
 
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Hide scrollbars utility */
 .no-scrollbar::-webkit-scrollbar {
-    display: none;
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass-panel {
+  background: rgba(18, 18, 20, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Active stories border ring */
+.stories-ring-glowing {
+  background: linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7);
+  padding: 2px;
+}
+
+/* Animations */
+@keyframes heartPop {
+  0% { transform: scale(0.9); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideUpDrawer {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes messageIn {
+  from { transform: scale(0.95) translateY(4px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.animate-heart-pop {
+  animation: heartPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUpDrawer 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-message-in {
+  animation: messageIn 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Custom cursive font helper */
+.cursive-brand {
+  font-family: "Baloo Bhai 2", cursive;
+}
+
+/* Responsive grid for Connections */
+.connections-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+@media (min-width: 600px) {
+  .connections-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1000px) {
+  .connections-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1500px) {
+  .connections-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
