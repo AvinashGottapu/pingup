@@ -218,9 +218,6 @@ async def photo_magic_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class ToxicityRequest(BaseModel):
-
-
 class ExplainRequest(BaseModel):
     text: str
     language: str | None = None
