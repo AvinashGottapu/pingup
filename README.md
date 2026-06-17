@@ -1,249 +1,242 @@
 # PingUp 🚀
 
-PingUp is a state-of-the-art, feature-rich social media application built with a modern decoupled architecture. It provides users with real-time communications, rich feeds and stories, interactive connections, and a suite of advanced AI integrations (powered by Google Gemini and TensorFlow) designed to enhance user engagement.
+## Overview
+
+PingUp is a real-time communication platform built using React, Node.js, Socket.IO, and WebRTC. It enables users to make peer-to-peer voice calls, share screens during conversations, and communicate with low latency using WebRTC-based media streaming and Socket.IO signaling.
 
 ---
 
-## 📋 Table of Contents
+## Features
 
-1. [Features](#-features)
-2. [Architecture](#-architecture)
-3. [Tech Stack](#-tech-stack)
-4. [Project Directory Structure](#-project-directory-structure)
-5. [Environment Configuration](#-environment-configuration)
-6. [Getting Started & Installation](#-getting-started--installation)
-7. [API & Services Overview](#-api--services-overview)
-8. [Deployment](#-deployment)
-
----
-
-## ✨ Features
-
-- **👥 Feed & Social Connections**: Users can create posts with media, comment on posts, manage connection requests, follow friends, and view stories.
-- **💬 Real-Time Messaging**: Real-time direct chat and messaging supported by Socket.io, featuring read/unread statuses, typing indicators, and message deletions.
-- **📞 Voice & Video Calling**: Seamless voice and video calling features built using WebRTC and real-time signaling.
-- **🤖 PingBuddy AI Chat Assistant**: An intelligent in-app companion powered by Google Gemini `gemini-2.5-flash` that helps users draft replies, answers questions, and coordinates interactions.
-- **🪄 Photo Magic**: An AI-powered media analyzer. Upload an image, and PingBuddy will generate catchy captions, trending hashtags, or inspiring quotes.
-- **🧠 Slang & Cultural Decoder**: Understand the context of any post or comment. PingUp AI explains slang, idioms, memes, or cultural jargon concisely.
-- **🛡️ Toxicity Checker**: A machine learning service built into the AI backend using TensorFlow to verify comments/posts and flag toxic or offensive content before it is published.
-- **⚡ Background Job Processing**: Uses Inngest to orchestrate background queues (such as user synchronization from Clerk Webhooks, email notifications, and data updates).
+* 📞 One-to-One Voice Calling using WebRTC
+* 🖥️ Real-Time Screen Sharing
+* ⚡ Socket.IO-based Signaling System
+* 🔄 SDP Offer/Answer & ICE Candidate Exchange
+* 🔐 Secure Authentication with Clerk
+* 📱 Responsive Design for Desktop and Mobile
+* 🎙️ Mute / Unmute Controls
+* 🔊 Speaker Controls
+* 🗂️ Room-based Communication Architecture
+* 📉 Call Minimize and Restore Functionality
 
 ---
 
-## 🏗️ Architecture
+## Tech Stack
 
-PingUp utilizes a decoupled multi-service architecture:
+### Frontend
 
-```mermaid
-graph TD
-    Client[React Frontend] <-->|HTTP / Socket.io| Server[Express Server]
-    Client <-->|HTTP| AIBackend[FastAPI AI Service]
-    Server <-->|Event Processing| Inngest[Inngest Event Broker]
-    Server <-->|Database Queries| MongoDB[(MongoDB Atlas)]
-    Server <-->|Cache / Session| Redis[(Redis Server)]
-    AIBackend <-->|Toxicity Check / Cache| Redis
-    AIBackend -->|Generative AI| Gemini[Google Gemini API]
-    Client -->|Auth Verification| Clerk[Clerk Auth Service]
-    Server -->|Image Uploads & CDN| ImageKit[ImageKit]
-    Client -->|Speech-to-Text / TTS| AzureSpeech[Azure Speech Services]
-```
+* React.js
+* Redux Toolkit
+* Tailwind CSS
+* Socket.IO Client
+* WebRTC
+* Clerk Authentication
 
----
+### Backend
 
-## 💻 Tech Stack
-
-### Frontend (`/client`)
-- **Framework**: React 19, Vite
-- **State Management**: Redux Toolkit & React-Redux
-- **Styling**: Tailwind CSS v4, Lucide React (Icons)
-- **Real-Time**: Socket.io Client
-- **Authentication**: Clerk React SDK
-- **Utilities**: Axios, React Hot Toast, Moment.js, React Speech Recognition
-
-### Primary Backend (`/server`)
-- **Runtime**: Node.js (Express v5)
-- **Database**: MongoDB (via Mongoose ORM)
-- **Real-Time**: Socket.io Server (with Redis Adapter)
-- **Event Orchestration**: Inngest SDK
-- **File Uploads**: ImageKit SDK (Media Hosting)
-- **Email Notifications**: Nodemailer / Resend
-- **Auth Middleware**: Clerk Express Middleware
-
-### AI Service Backend (`/ai_backend`)
-- **Framework**: FastAPI (Python 3)
-- **SDK**: Google GenAI SDK (Gemini `gemini-2.5-flash` model integration)
-- **Caching & Rate Limiting**: Redis Async client (with Lua scripts)
-- **Machine Learning**: TensorFlow (local toxicity model classification)
+* Node.js
+* Express.js
+* Socket.IO
+* MongoDB
 
 ---
 
-## 📂 Project Directory Structure
+## Architecture
 
 ```text
-pingup/
-├── client/              # React Frontend (Vite, Redux, Tailwind v4)
-│   ├── src/
-│   │   ├── Pages/       # Feed, Profile, Messages, calling rooms, AI features
-│   │   ├── components/  # Modals, sidebars, cards, notifications
-│   │   ├── api/         # Axios configurations & WebSocket clients
-│   │   └── features/    # Redux slices (user, connections, messages)
-│   └── package.json
-│
-├── server/              # Express Node Backend (Socket.io, MongoDB, Inngest)
-│   ├── configs/         # Database, Nodemailer, ImageKit, Redis configurations
-│   ├── controllers/     # Controller logic for users, posts, stories, messages
-│   ├── models/          # Mongoose Schemas (User, Post, Story, Messages, etc.)
-│   ├── routes/          # Express API route endpoints
-│   ├── inngest/         # Inngest background event handlers & Clerk sync
-│   ├── socketManager.js # WebSocket event listeners for chats and WebRTC calls
-│   └── package.json
-│
-└── ai_backend/          # Python AI Backend (FastAPI, Google GenAI SDK)
-    ├── main.py          # FastAPI application endpoints & Redis rate-limiting
-    ├── services/        # ML helpers (Toxicity classifier)
-    └── requirements.txt # Python package requirements
+Frontend (React)
+        │
+        ▼
+Socket.IO Signaling Server
+        │
+        ▼
+WebRTC Peer Connection
+        │
+        ▼
+Voice Communication & Screen Sharing
 ```
 
 ---
 
-## ⚙️ Environment Configuration
+## WebRTC Call Flow
 
-To run the application, copy or create `.env` files in each service directory.
-
-### 1. Frontend Configuration (`client/.env`)
-Create `client/.env`:
-```env
-VITE_BASEURL=http://localhost:4000
-VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-VITE_AI_API_URL=http://localhost:8000
-VITE_AZURE_SPEECH_KEY=your_azure_speech_key
-VITE_AZURE_REGION=your_azure_speech_region
-```
-
-### 2. Primary Node Backend Configuration (`server/.env`)
-Create `server/.env`:
-```env
-PORT=4000
-MONGODB_URL=mongodb+srv://...
-CLERK_SECRET_KEY=your_clerk_secret_key
-CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-FRONTEND_URL=http://localhost:5173
-REDIS_URL=redis://localhost:6379
-
-# ImageKit Integration
-IMAGEKIT_PUBLIC_KEY=your_imagekit_public_key
-IMAGEKIT_PRIVATE_KEY=your_imagekit_private_key
-IMAGEKIT_URL_ENDPOINT=your_imagekit_url_endpoint
-
-# Email Notifications
-STMP_USER=your_smtp_username
-STMP_PASS=your_smtp_password
-SENDER_EMAIL=noreply@yourdomain.com
-```
-
-### 3. AI Service Backend Configuration (`ai_backend/.env`)
-Create `ai_backend/.env`:
-```env
-GEMINI_API_KEY=your_gemini_api_key
-REDIS_URL=redis://localhost:6379
+```text
+User A joins room
+      ↓
+User B joins room
+      ↓
+Offer Creation
+      ↓
+Answer Creation
+      ↓
+ICE Candidate Exchange
+      ↓
+Peer-to-Peer Connection
+      ↓
+Voice Communication
 ```
 
 ---
 
-## 🚀 Getting Started & Installation
+## Screen Sharing Flow
 
-Ensure you have [Node.js](https://nodejs.org/) (v22+ recommended), [Python 3](https://www.python.org/), and [Redis](https://redis.io/) installed and running on your local machine.
+```text
+User clicks Share Screen
+      ↓
+getDisplayMedia()
+      ↓
+Screen Video Track Created
+      ↓
+Track Added to Existing PeerConnection
+      ↓
+Renegotiation Triggered
+      ↓
+New SDP Offer & Answer Exchange
+      ↓
+Remote User Receives Shared Screen
+```
 
-### Step 1: Run Redis Server
-Start your local Redis server:
+---
+
+## Project Structure
+
+```text
+PingUp
+│
+├── frontend
+│   ├── components
+│   ├── pages
+│   ├── api
+│   ├── hooks
+│   ├── features
+│   └── redux
+│
+├── backend
+│   ├── controllers
+│   ├── routes
+│   ├── middleware
+│   ├── socket
+│   └── models
+│
+└── README.md
+```
+
+---
+
+## Installation
+
+### Clone Repository
+
 ```bash
-# On Linux/macOS
-redis-server
-
-# On Windows (WSL or native executable)
-redis-server.exe
+git clone https://github.com/AvinashGottapu/pingup.git
+cd pingup
 ```
 
-### Step 2: Set Up the AI Backend (`/ai_backend`)
-1. Navigate to the AI directory:
-   ```bash
-   cd ai_backend
-   ```
-2. Create and activate a python virtual environment:
-   ```bash
-   python -m venv venv
-   # On Windows:
-   venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Start the FastAPI server:
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
+### Install Frontend Dependencies
 
-### Step 3: Set Up the Primary Node Backend (`/server`)
-1. Navigate to the server directory:
-   ```bash
-   cd ../server
-   ```
-2. Install npm dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the Express server:
-   ```bash
-   # Development mode with Nodemon
-   npm run dev
-   # Or directly
-   npm start
-   ```
-4. *(Optional)* Run Inngest Dev Server to test background jobs:
-   ```bash
-   npx inngest-cli@latest dev -u http://localhost:4000/api/inngest
-   ```
+```bash
+cd frontend
+npm install
+```
 
-### Step 4: Set Up the Frontend (`/client`)
-1. Navigate to the client directory:
-   ```bash
-   cd ../client
-   ```
-2. Install npm dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the Vite development server:
-   ```bash
-   npm run dev
-   ```
-4. Open your browser and navigate to `http://localhost:5173`.
+### Install Backend Dependencies
+
+```bash
+cd backend
+npm install
+```
 
 ---
 
-## 🔗 API & Services Overview
+## Environment Variables
 
-### Core Backend Endpoints (`http://localhost:4000/api`)
-- `/user`: Handles profile fetching, connections, follower listings, and status sync.
-- `/post`: Creates, reads, likes, and comments on user posts.
-- `/story`: Posts and fetches ephemeral user stories.
-- `/message`: Retrieves chat history and message rooms.
-- `/inngest`: Serving endpoint for background jobs.
+Create a `.env` file and configure:
 
-### AI Backend Endpoints (`http://localhost:8000/api`)
-- `/api/chat`: PingBuddy assistant chat using Gemini with Redis-based sliding window rate-limiting.
-- `/api/photo-magic`: Multimodal generation endpoint that creates quotes/captions/hashtags for uploaded images.
-- `/api/explain`: Post analyzer that decodes internet slang, cultural jokes, or idioms.
-- `/api/check-toxicity`: Machine learning comment evaluator powered by TensorFlow.
+```env
+PORT=5000
+
+MONGODB_URI=your_mongodb_connection_string
+
+CLERK_SECRET_KEY=your_clerk_secret
+CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+
+JWT_SECRET=your_secret
+```
 
 ---
 
-## 📦 Deployment
+## Run Application
 
-This project is configured to deploy seamlessly to cloud hosting platforms:
-- **Frontend / Node Server**: Preconfigured with `vercel.json` for hosting on [Vercel](https://vercel.com).
-- **FastAPI Backend**: Can be containerized via Docker or hosted directly on [Render](https://render.com) / [Railway](https://railway.app).
-- **Database**: Recommended to use [MongoDB Atlas](https://www.mongodb.com/products/platform/atlas-database) (cloud) and [Upstash Redis](https://upstash.com) (serverless Redis).
+### Backend
+
+```bash
+npm run dev
+```
+
+### Frontend
+
+```bash
+npm run dev
+```
+
+---
+
+## Key Concepts Used
+
+### WebRTC
+
+* Peer-to-peer communication
+* SDP Offer / Answer mechanism
+* ICE Candidate exchange
+* NAT Traversal using STUN servers
+
+### Socket.IO
+
+* Real-time signaling
+* Room-based communication
+* Event-driven architecture
+
+### Authentication
+
+* User authentication using Clerk
+* Protected routes
+* Secure socket connections
+
+---
+
+## Future Enhancements
+
+* 🎥 Video Calling
+* 📝 Collaborative Whiteboard (Canvas + Socket.IO)
+* 👥 Group Calls
+* 📂 File Sharing
+* 📹 Call Recording
+* 🔔 Push Notifications
+* 🌐 End-to-End Encryption
+* 📊 Call Analytics
+
+---
+
+## What I Learned
+
+Through PingUp, I gained hands-on experience with:
+
+* WebRTC Fundamentals
+* Socket.IO and Real-Time Communication
+* SDP Offers and Answers
+* ICE Candidate Exchange
+* Screen Sharing Implementation
+* Authentication & Authorization
+* React State Management
+* Peer-to-Peer Networking Concepts
+* Building Production-Ready Full Stack Applications
+
+---
+
+## Author
+
+**Avinash Gottapu**
+
+Passionate about Full Stack Development, Real-Time Communication Systems, Competitive Programming, and Software Engineering.
+
+GitHub: https://github.com/AvinashGottapu
