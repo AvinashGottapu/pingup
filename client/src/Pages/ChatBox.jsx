@@ -18,6 +18,7 @@ import PingBuddyModal from "../components/PingBuddyModal";
 const ChatBox = () => {
   const { messages } = useSelector((state) => state.messages);
   const currentUser = useSelector((state) => state.user.value);
+  const activeRoomId = useSelector((state) => state.user.activeRoomId);
   const connections = useSelector((state) => state.connections.connections);
 
   const [activeMsgId, setActiveMsgId] = useState(null);
@@ -36,7 +37,7 @@ const ChatBox = () => {
   const [hasMore, setHasMore] = useState(true);
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const [peerPresence, setPeerPresence] = useState(null);
-
+  
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const topSentinelRef = useRef(null);
@@ -422,6 +423,10 @@ const ChatBox = () => {
           {/* Calling Action Button */}
           <button
             onClick={async () => {
+              if (activeRoomId) {
+                toast.error("You are already in an active call!");
+                return;
+              }
               const roomId = [currentUser._id, user._id].sort().join("-");
               try {
                 const token = await getToken();
@@ -446,8 +451,12 @@ const ChatBox = () => {
                 toast.error("Could not notify user of call");
               }
             }}
-            className="p-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-blue-500 hover:from-pink-600 hover:to-blue-600 text-white transition-all hover:scale-105 cursor-pointer shadow-md shadow-pink-500/20 border-0"
-            title="Start Audio/Video Call"
+            className={`p-2.5 rounded-2xl transition-all border-0 ${
+              activeRoomId 
+                ? "bg-slate-750 text-slate-500 cursor-not-allowed opacity-50 shadow-none" 
+                : "bg-gradient-to-r from-pink-500 to-blue-500 hover:from-pink-600 hover:to-blue-600 text-white hover:scale-105 cursor-pointer shadow-md shadow-pink-500/20"
+            }`}
+            title={activeRoomId ? "You are already on a call" : "Start Audio/Video Call"}
           >
             <Phone className="w-4.5 h-4.5 stroke-[2.5]" />
           </button>

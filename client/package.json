@@ -13,7 +13,6 @@
     "@clerk/clerk-react": "^5.53.4",
     "@reduxjs/toolkit": "^2.11.0",
     "@tailwindcss/vite": "^4.1.16",
-    "@zegocloud/zego-uikit-prebuilt": "^2.17.2",
     "axios": "^1.13.2",
     "lucide-react": "^0.548.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.48.0",

@@ -4,6 +4,8 @@ import { toast } from 'react-hot-toast'
 
 const initialState = {
     value : null,
+    activeRoomId: null,
+    isMinimized: false,
 }
 
 
@@ -34,7 +36,16 @@ const userSlice = createSlice({
     name : 'user',
     initialState,
     reducers : { 
-
+        setActiveRoom: (state, action) => {
+            state.activeRoomId = action.payload;
+        },
+        setIsMinimized: (state, action) => {
+            state.isMinimized = action.payload;
+        },
+        clearActiveRoom: (state) => {
+            state.activeRoomId = null;
+            state.isMinimized = false;
+        }
     },
     extraReducers : (builder) => { 
         builder.addCase(fetchUser.fulfilled, (state, action) => { 
@@ -45,5 +56,7 @@ const userSlice = createSlice({
     }
 })
 
+
+export const { setActiveRoom, setIsMinimized, clearActiveRoom } = userSlice.actions;
 
 export default userSlice.reducer

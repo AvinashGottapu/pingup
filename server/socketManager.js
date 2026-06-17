@@ -233,6 +233,89 @@ export const initSocketServer = async (httpServer) => {
       ack?.({ success: true })
     })
 
+    // --- CUSTOM WEBRTC SIGNALING HANDLERS ---
+    
+    /**
+     * Event: call:join-room
+     * Triggered when a peer enters the voice call Roompage.
+     * The client joins the Socket.io room and alerts any already joined peer.
+     */
+    socket.on('call:join-room', ({ roomId }) => {
+      if (!roomId) return
+      
+      socket.join(roomId)
+      
+      // Let other clients in the room know someone joined so they can initiate WebRTC handshake
+      socket.to(roomId).emit('call:user-joined', {
+        userId: socket.userId
+      })
+    })
+
+    /**
+     * Event: call:signal
+     * Relays WebRTC signaling payloads (SDP offers, SDP answers, ICE candidates)
+     * between the peers inside the call room.
+     */
+    socket.on('call:signal', ({ roomId, signal }) => {
+      if (!roomId || !signal) return
+      
+      // Send the signal payload to all other clients in the room
+      socket.to(roomId).emit('call:signal', {
+        signal,
+        fromUserId: socket.userId
+      })
+    })  
+
+    /**
+     * Event: call:end
+     * Informs the other peer that the call has been hung up / ended.
+     */
+    socket.on('call:end', ({ roomId }) => {
+      if (!roomId) return
+      
+      // Parse the target user ID from the roomId (format: userId1-userId2)
+      const userIds = roomId.split('-')
+      const otherUserId = userIds.find((id) => id !== socket.userId)
+      
+      if (otherUserId) {
+        // Emit call:ended directly to the other user's private socket channel (handles early cancellation)
+        emitToUser(otherUserId, 'call:ended', { roomId })
+      }
+      
+      // Broadcast call:ended event to the socket.io room (for users already in the room page)
+      socket.to(roomId).emit('call:ended')
+      
+      // Leave the socket room
+      socket.leave(roomId)
+    })
+
+    /**
+     * Event: whiteboard:draw
+     * Relays drawing coordinates and styles to other peers in the room.
+     */
+    socket.on('whiteboard:draw', ({ roomId, drawData }) => {
+      if (!roomId || !drawData) return
+      socket.to(roomId).emit('whiteboard:draw', { drawData })
+    })
+
+    /**
+     * Event: whiteboard:clear
+     * Relays canvas clear actions to other peers in the room.
+     */
+    socket.on('whiteboard:clear', ({ roomId }) => {
+      if (!roomId) return
+      socket.to(roomId).emit('whiteboard:clear')
+    })
+
+    /**
+     * Event: whiteboard:toggle
+     * Relays whiteboard visibility toggle actions (opening/closing) to other peers in the room.
+     */
+    socket.on('whiteboard:toggle', ({ roomId, isOpen }) => {
+      if (!roomId) return
+      socket.to(roomId).emit('whiteboard:toggle', { isOpen })
+    })
+  
     socket.on('disconnect', async () => {
       socket.leave(socket.userId)
       await unregisterOnlineUser(socket.userId, socket.id)

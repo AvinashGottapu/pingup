@@ -15,7 +15,7 @@ import Layout from './Pages/Layout'
 import { useUser, useAuth } from '@clerk/clerk-react'
 import { toast, Toaster } from 'react-hot-toast'
 import { useDispatch, useSelector } from 'react-redux'
-import { fetchUser } from './features/user/userSlice'
+import { fetchUser, setActiveRoom, setIsMinimized, clearActiveRoom } from './features/user/userSlice'
 import { fetchConnections } from './features/connections/connectionsSlice'
 import { addMessages, deleteMessage, markMessagesAsSeen } from './features/messages/messagesSlice'
 import Notification from './components/Notification'
@@ -31,6 +31,19 @@ const App = () => {
 
   const { pathname } = useLocation()
   const pathnameRef = useRef(pathname)
+  
+  const activeRoomId = useSelector((state) => state.user.activeRoomId)
+  const isMinimized = useSelector((state) => state.user.isMinimized)
+  const activeRoomIdRef = useRef(null)
+
+  const getTokenRef = useRef(getToken)
+  useEffect(() => {
+    getTokenRef.current = getToken
+  }, [getToken])
+
+  useEffect(() => {
+    activeRoomIdRef.current = activeRoomId
+  }, [activeRoomId])
 
   useEffect(() => {
     let retryTimer
@@ -88,6 +101,13 @@ const App = () => {
     audioRef.current.loop = true
   }, [])
 
+  const handleCloseCall = () => {
+    dispatch(clearActiveRoom())
+    if (pathname.startsWith('/room/')) {
+      navigate('/')
+    }
+  }
+
   useEffect(() => {
     if (!user) {
       disconnectSocket()
@@ -97,60 +117,88 @@ const App = () => {
     let cancelled = false
     let currentSocket
 
+    const handleNewMessage = (payload) => {
+      const message = payload?.message ?? payload
+      const sender = message?.sender
+      const senderId = sender?._id || message?.from_user_id
+
+      if (pathnameRef.current === `/messages/${senderId}`) {
+        dispatch(addMessages(message))
+        if (currentSocket) {
+          currentSocket.emit('messages:seen', { to_user_id: senderId })
+        }
+        return
+      }
+
+      toast.custom(
+        (t) => <Notification t={t} message={message} />,
+        { position: 'bottom-right' },
+      )
+    }
+
+    const handleMessagesSeen = ({ from_user_id }) => {
+      if (pathnameRef.current === `/messages/${from_user_id}`) {
+        dispatch(markMessagesAsSeen({ from_user_id }))
+      }
+    }
+
+    const handleDeletedMessage = ({ messageId }) => {
+      dispatch(deleteMessage(messageId))
+    }
+    
+
+    const handleIncomingCall = (payload) => {
+      if (activeRoomIdRef.current) {
+        const socket = getSocket()
+        if (socket) {
+          socket.emit('call:reject', { to_user_id: payload.from_user_id })
+        }
+        return
+      }
+      setIncomingCall(payload)
+      audioRef.current.play().catch((error) => console.log('Audio play failed:', error))
+    }
+
+    const handleCallRejected = (payload) => {
+      toast.error('Call Declined')
+      dispatch(clearActiveRoom())
+      if (pathnameRef.current.startsWith('/room')) {
+        navigate('/messages/' + payload.from_user_id)
+      }
+    }
+
+    const handleCallEnded = (payload) => {
+      if (activeRoomIdRef.current && (!payload?.roomId || activeRoomIdRef.current === payload.roomId)) {
+        handleCloseCall()
+      }
+
+      setIncomingCall((prev) => {
+        // Only show 'Call cancelled' toast if the call modal was currently ringing/active
+        if (prev && prev.roomId === payload.roomId) {
+          toast.error('Call cancelled')
+        }
+        return null
+      })
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+
+    const handleSocketError = (error) => {
+      console.error('Socket error:', error)
+    }
+
     const setupSocket = async () => {
-      const token = await getToken()
+      const token = await getTokenRef.current()
       if (cancelled) return
 
       currentSocket = createSocket(token)
-
-      const handleNewMessage = (payload) => {
-        const message = payload?.message ?? payload
-        const sender = message?.sender
-        const senderId = sender?._id || message?.from_user_id
-
-        if (pathnameRef.current === `/messages/${senderId}`) {
-          dispatch(addMessages(message))
-          currentSocket.emit('messages:seen', { to_user_id: senderId })
-          return
-        }
-
-        toast.custom(
-          (t) => <Notification t={t} message={message} />,
-          { position: 'bottom-right' },
-        )
-      }
-
-      const handleMessagesSeen = ({ from_user_id }) => {
-        if (pathnameRef.current === `/messages/${from_user_id}`) {
-          dispatch(markMessagesAsSeen({ from_user_id }))
-        }
-      }
-
-      const handleDeletedMessage = ({ messageId }) => {
-        dispatch(deleteMessage(messageId))
-      }
-
-      const handleIncomingCall = (payload) => {
-        setIncomingCall(payload)
-        audioRef.current.play().catch((error) => console.log('Audio play failed:', error))
-      }
-
-      const handleCallRejected = (payload) => {
-        toast.error('Call Declined')
-        if (pathnameRef.current.startsWith('/room')) {
-          navigate('/messages/' + payload.from_user_id)
-        }
-      }
-
-      const handleSocketError = (error) => {
-        console.error('Socket error:', error)
-      }
 
       currentSocket.on('message:new', handleNewMessage)
       currentSocket.on('messages:seen', handleMessagesSeen)
       currentSocket.on('message:deleted', handleDeletedMessage)
       currentSocket.on('call:incoming', handleIncomingCall)
       currentSocket.on('call:rejected', handleCallRejected)
+      currentSocket.on('call:ended', handleCallEnded)
       currentSocket.on('connect_error', handleSocketError)
     }
 
@@ -160,15 +208,16 @@ const App = () => {
       cancelled = true
       const socket = getSocket()
       if (socket) {
-        socket.off('message:new')
-        socket.off('messages:seen')
-        socket.off('message:deleted')
-        socket.off('call:incoming')
-        socket.off('call:rejected')
-        socket.off('connect_error')
+        socket.off('message:new', handleNewMessage)
+        socket.off('messages:seen', handleMessagesSeen)
+        socket.off('message:deleted', handleDeletedMessage)
+        socket.off('call:incoming', handleIncomingCall)
+        socket.off('call:rejected', handleCallRejected)
+        socket.off('call:ended', handleCallEnded)
+        socket.off('connect_error', handleSocketError)
       }
     }
-  }, [user, getToken, dispatch, navigate])
+  }, [user, dispatch, navigate])
 
   const handleAcceptCall = () => {
     setIncomingCall(null)
@@ -204,6 +253,22 @@ const App = () => {
     return () => clearTimeout(timer)
   }, [incomingCall])
 
+
+  useEffect(() => {
+    if (pathname.startsWith('/room/')) {
+      const parts = pathname.split('/')
+      const roomId = parts[parts.length - 1]
+      if (roomId) {
+        dispatch(setActiveRoom(roomId))
+        dispatch(setIsMinimized(false))
+      }
+    } else {
+      if (activeRoomIdRef.current) {
+        dispatch(setIsMinimized(true))
+      }
+    }
+  }, [pathname, dispatch])
+
   return (
     <>
       <Toaster />
@@ -220,7 +285,7 @@ const App = () => {
           <Route path='ai' element={<AIPage />} />
           <Route path='photo-magic' element={<PhotoMagicPage />} />
         </Route>
-        <Route path='/room/:roomId' element={<Roompage />} />
+        <Route path='/room/:roomId' element={<></>} />
       </Routes>
       {incomingCall && (
         <CallNotification
@@ -229,6 +294,12 @@ const App = () => {
           onAccept={handleAcceptCall}
           onDecline={handleDeclineCall}
           callerId={incomingCall.from_user_id}
+        />
+      )}
+      {activeRoomId && (
+        <Roompage
+          roomId={activeRoomId}
+          onClose={handleCloseCall}
         />
       )}
     </>

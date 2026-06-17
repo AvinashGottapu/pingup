@@ -21,130 +21,6 @@ import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-// ── Waveform Visualizer ──────────────────────────────────────────────────────
-const WaveformBar = ({ isListening }) => {
-  const canvasRef = useRef(null);
-  const animFrameRef = useRef(null);
-  const analyserRef = useRef(null);
-  const streamRef = useRef(null);
-  const audioContextRef = useRef(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const clearCanvas = () => {
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
-
-    if (!isListening) {
-      cancelAnimationFrame(animFrameRef.current);
-
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-
-      clearCanvas();
-      return;
-    }
-
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then((stream) => {
-        streamRef.current = stream;
-
-        const audioCtx = new (
-          window.AudioContext || window.webkitAudioContext
-        )();
-        audioContextRef.current = audioCtx;
-
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 128;
-        analyser.smoothingTimeConstant = 0.85;
-        source.connect(analyser);
-        analyserRef.current = analyser;
-
-        const ctx = canvas.getContext("2d");
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const draw = () => {
-          animFrameRef.current = requestAnimationFrame(draw);
-          analyser.getByteFrequencyData(dataArray);
-
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          const barCount = 40;
-          const barWidth = 3;
-          const gap = (canvas.width - barCount * barWidth) / (barCount + 1);
-          const centerY = canvas.height / 2;
-
-          for (let i = 0; i < barCount; i++) {
-            const dataIndex = Math.floor((i / barCount) * bufferLength);
-            const value = dataArray[dataIndex] / 255;
-            const barHeight = Math.max(3, value * canvas.height * 0.85);
-
-            const x = gap + i * (barWidth + gap);
-            const gradient = ctx.createLinearGradient(
-              0,
-              centerY - barHeight / 2,
-              0,
-              centerY + barHeight / 2,
-            );
-            gradient.addColorStop(0, "#818cf8");
-            gradient.addColorStop(1, "#a855f7");
-
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            if (ctx.roundRect) {
-              ctx.roundRect(x, centerY - barHeight / 2, barWidth, barHeight, 2);
-            } else {
-              ctx.rect(x, centerY - barHeight / 2, barWidth, barHeight);
-            }
-            ctx.fill();
-          }
-        };
-
-        draw();
-      })
-      .catch((err) => {
-        console.error("Mic access denied:", err);
-      });
-
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-    };
-  }, [isListening]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={260}
-      height={36}
-      className="flex-1"
-      style={{ display: "block" }}
-    />
-  );
-};
 
 // ── Main AI Page ─────────────────────────────────────────────────────────────
 const AIPage = () => {
@@ -473,7 +349,7 @@ const sendMessage = async () => {
   }, []);
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-white dark:bg-[#0b0f1a] overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-7.5rem)] sm:h-[100dvh] bg-white dark:bg-[#0b0f1a] overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5 bg-white/80 dark:bg-[#0b0f1a]/80 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-4">
@@ -619,7 +495,9 @@ const sendMessage = async () => {
               </span>
             </span>
 
-            <WaveformBar isListening={isListening} />
+            <div className="flex-1 text-[13px] text-slate-600 dark:text-slate-300 font-medium truncate px-2">
+              {inputValue || "Listening..."}
+            </div>
 
             <button
               onClick={cancelListening}
