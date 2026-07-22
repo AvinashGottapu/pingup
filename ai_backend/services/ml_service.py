@@ -16,7 +16,7 @@ with open("services/vocab.txt", "r", encoding="utf-8") as f:
     vocab = [line.rstrip("\n") for line in f]
 
 vectorizer.set_vocabulary(vocab)
-
+    
 def check_toxicity(comment: str):
     vectorized_comment = vectorizer([comment])
     prediction = model.predict(vectorized_comment)[0]

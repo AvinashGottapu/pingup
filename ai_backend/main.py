@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
+import math
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -48,47 +49,48 @@ async def check_rate_limit(identifier: str, limit: int, window_seconds: int):
     try:
         now_ms = int(time.time() * 1000)
         window_ms = window_seconds * 1000
+        clear_before = now_ms - window_ms
         member = f"{now_ms}-{uuid4().hex}"
 
-        result = await redis_client.eval(
-            """
-            local now = tonumber(ARGV[1])
-            local window_ms = tonumber(ARGV[2])
-            local member = ARGV[3]
-            local cutoff = now - window_ms
+        # Use a transaction (multi) to make operations atomic
+        # Pipe => SPEED and Multi => Safety BOTH HERE...
+        async with redis_client.pipeline(transaction=True) as pipe:
+            pipe.zremrangebyscore(identifier, 0, clear_before)
+            pipe.zcard(identifier)
+            result = await pipe.execute()
+        
+        current_count = result[1]
 
-            redis.call('zadd', KEYS[1], now, member)
-            redis.call('zremrangebyscore', KEYS[1], '-inf', cutoff)
+        if current_count >= limit:
+            oldest_timestamp = await redis_client.zrange(identifier, 0, 0, withscores=True)
+            retry_after = window_seconds
+            
+            if oldest_timestamp and len(oldest_timestamp) > 0:
+                oldest_time = int(oldest_timestamp[0][1])
+                retry_after = math.ceil((oldest_time + window_ms - now_ms) / 1000)
+            
+            retry_after = retry_after if retry_after > 0 else 1
+            
+            return {
+                "allowed": False,
+                "ttl": retry_after,
+                "remaining": 0,
+            }
 
-            local current = redis.call('zcard', KEYS[1])
-            local oldest = redis.call('zrange', KEYS[1], 0, 0, 'WITHSCORES')
-            local ttl = 0
-
-            if #oldest > 0 then
-              local oldest_score = tonumber(oldest[2])
-              ttl = math.max(0, math.ceil((oldest_score + window_ms - now) / 1000))
-            end
-
-            redis.call('expire', KEYS[1], tonumber(ARGV[4]))
-            return { current, ttl }
-            """,
-            1,
-            identifier,
-            now_ms,
-            window_ms,
-            member,
-            window_seconds,
-        )
-
-        current_count = int(result[0])
-        ttl = max(int(result[1]), 0)
+        # Add current request timestamp to the sorted set and set expiration
+        async with redis_client.pipeline(transaction=True) as pipe:
+            pipe.zadd(identifier, {member: now_ms})
+            pipe.expire(identifier, window_seconds)
+            await pipe.execute()
 
         return {
-            "allowed": current_count <= limit,
-            "ttl": ttl,
-            "remaining": max(0, limit - current_count),
+            "allowed": True,
+            "ttl": 0,
+            "remaining": max(0, limit - current_count - 1),
         }
-    except Exception:
+
+    except Exception as e:
+        print(f"[Rate Limiter] Error: {e}")
         return {"allowed": True, "ttl": 0}
 
 

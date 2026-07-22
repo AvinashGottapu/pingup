@@ -20,9 +20,9 @@ const Whiteboard = ({ socket, roomId, onClose, historyRef }) => {
 
   // Available brush sizes
   const brushSizes = [
-    { label: "Thin", value: 3 },
-    { label: "Medium", value: 6 },
-    { label: "Thick", value: 12 }
+    { label: "Thin", value: 2 },
+    { label: "Medium", value: 4 },
+    { label: "Thick", value: 8 }
   ];
 
   // Helper to get coordinates relative to the canvas DOM element
