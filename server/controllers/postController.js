@@ -89,7 +89,7 @@ const getPaginatedComments = async (postId, cursor, limit) => {
           paginatedComments.length - 1
         ]._id.toString()}`
       : null;
-
+    
   return {
     comments: paginatedComments,
     hasMore,
@@ -126,6 +126,8 @@ export const addPost = async (req, res) => {
             ],
           });
 
+          fs.unlinkSync(image.path); // 🧹 Delete temporary post image from disk!
+
           return url;
         })
       );
@@ -137,6 +139,7 @@ export const addPost = async (req, res) => {
       image_urls,
       post_type,
     });
+
 
     const user = await User.findById(userId)
     const impactedUsers = [...new Set([userId, ...(user?.connections || []), ...(user?.following || [])])]
@@ -176,17 +179,18 @@ export const getFeedPosts = async (req, res) => {
 
     const user = await User.findById(userId);
     const userIds = [userId, ...user.connections, ...user.following];
-
+    
     const cursorFilter = buildCursorFilter(cursor);
 
     const query = {
       user: { $in: userIds },
       ...(Object.keys(cursorFilter).length ? cursorFilter : {}),
-    };
+    };   // If start = {} else cursorfilter..
 
     const posts = await Post.find(query)
       .populate("user")
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ createdAt: -1, _id: -1 }) // You tell MongoDB: "I want NEWEST to OLDEST order!"
+      // MongoDB sees your .sort({ createdAt: -1 }) and says: "Aha! I will use our pre-sorted index to grab the top 11 newest posts in 0.5 milliseconds!"
       .limit(limit + 1);
 
     const hasMore = posts.length > limit;
@@ -218,7 +222,7 @@ export const getFeedPosts = async (req, res) => {
             paginatedPosts.length - 1
           ].createdAt.toISOString()}|${paginatedPosts[
             paginatedPosts.length - 1
-          ]._id.toString()}`
+          ]._id.toString()}`  // next_cursor => CreatedAt + Id.. If last post then Null..
         : null;
 
     const responsePayload = {
@@ -480,7 +484,7 @@ export const deleteComment = async (req, res) => {
 };
 
 export const getPostComments = async (req, res) => {
-  try {
+  try {  // Same like the paginated posts..
     const { postId } = req.params;
 
     const cursor = req.query.cursor;
@@ -505,7 +509,7 @@ export const getPostComments = async (req, res) => {
       success: true,
       comments,
       nextCursor,
-      hasMore,
+      hasMore,  
     });
   } catch (error) {
     console.log(error);

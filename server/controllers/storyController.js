@@ -21,6 +21,7 @@ export const addUserStory = async (req, res) => {
                 fileName: media.originalname
             })
             media_url = response.url;
+            fs.unlinkSync(media.path); // 🧹 Delete temporary story media from disk!
         }
 
         // Create new story object

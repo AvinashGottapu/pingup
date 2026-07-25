@@ -92,7 +92,7 @@ pingup
 │   │   ├── imageKit.js         # ImageKit cloud media upload config
 │   │   ├── multer.js           # Multi-part form data parser middleware
 │   │   ├── nodeMailer.js       # Nodemailer transporter and mail templates
-│   │   └── redis.js            # Redis caching and RedisSubscriber client initialization
+│   │   └── redis.js            # Redis client initialization for caching, sessions, and presence
 │   ├── controllers/
 │   │   ├── messageController.js # Direct messaging and call history endpoints
 │   │   ├── postController.js    # Post, Comment, Like, and Feed query handlers

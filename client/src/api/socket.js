@@ -40,6 +40,7 @@ export const createSocket = (token) => {
   const userChanged = userId && currentUserId && currentUserId !== userId
   socket.auth = { token }
 
+  
   if (userChanged) {
     currentUserId = userId
     socket.disconnect()

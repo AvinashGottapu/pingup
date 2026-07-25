@@ -35,10 +35,11 @@ const Whiteboard = ({ socket, roomId, onClose, historyRef }) => {
     // Resolve client coordinate for mouse vs touch event
     let clientX, clientY;
     if (e.touches && e.touches.length > 0) {
-      clientX = e.touches[0].clientX;
+      clientX = e.touches[0].clientX; // On the phone.. There is no mouse.
       clientY = e.touches[0].clientY;
+      // 0 means which means The first finger touching the screen..
     } else {
-      clientX = e.clientX;
+      clientX = e.clientX; // On a computer, drawing happens with a mouse.
       clientY = e.clientY;
     }
 
@@ -175,6 +176,7 @@ const Whiteboard = ({ socket, roomId, onClose, historyRef }) => {
     if (!canvas) return;
 
     const resizeCanvas = () => {
+      // Actual size of the canvas on the screen
       const rect = canvas.getBoundingClientRect();
       // Only resize buffer if dimensions changed (prevents drawing lags/resets)
       if (canvas.width === rect.width && canvas.height === rect.height) return;
@@ -186,6 +188,7 @@ const Whiteboard = ({ socket, roomId, onClose, historyRef }) => {
       if (ctx && historyRef && historyRef.current) {
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
+        // smooths the joints between the micro-lines so it looks like a perfect curve!
         
         // Redraw all drawing history segments scaled to new canvas width/height
         historyRef.current.forEach((segment) => {
@@ -202,9 +205,11 @@ const Whiteboard = ({ socket, roomId, onClose, historyRef }) => {
     // Use ResizeObserver for accurate container dimensions (resolves animations/mobile layout paint latency)
     const observer = new ResizeObserver(() => {
       resizeCanvas();
+      // ResizeObserver is a browser API that watches an HTML element.
+      // "If this element's size changes, call my function."
     });
     observer.observe(canvas);
-
+    // This tells the observer: "Start watching this canvas."
     return () => {
       observer.disconnect();
     };

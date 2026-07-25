@@ -12,23 +12,19 @@ const REDIS_OPTIONS = {
   },
 }
 
-const redis = new Redis(REDIS_URL, REDIS_OPTIONS)  // Main Redis client for publishing + normal commands..
-const redisSubscriber = new Redis(REDIS_URL, REDIS_OPTIONS) // listening/subscribing 
+// Main Redis client for Caching, Sessions, and Presence Sets
+const redis = new Redis(REDIS_URL, REDIS_OPTIONS)
 
 redis.on('error', (error) => {
   console.warn('[Redis] client error:', error.message)
 })
 
-redisSubscriber.on('error', (error) => {
-  console.warn('[Redis] subscriber error:', error.message)
-})
-
-export { redis, redisSubscriber }
+export { redis }
 
 export const getRedisStatus = async () => {
   try {
-    return await redis.ping()  // Returns 'PONG' if Redis is working...
+    return await redis.ping() // Returns 'PONG' if Redis is working
   } catch (error) {
-    return null   // If there's an error (e.g., connection issue), return null to indicate Redis is not available
+    return null // If there's an error, return null
   }
 }

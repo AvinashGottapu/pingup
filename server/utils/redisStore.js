@@ -1,7 +1,6 @@
 import { redis } from '../configs/redis.js'
 
 const SESSION_TTL = 60 * 60
-const TYPING_TTL = 8
 const FEED_TTL = 60
 
 const safeJsonParse = (value) => {
@@ -30,74 +29,62 @@ export const checkRateLimit = async (key, limit, windowSeconds) => {
   return withRedis(async () => {
     const now = Date.now()
     const windowMs = Number(windowSeconds) * 1000
-    const member = `${now}-${Math.random().toString(36).slice(2, 10)}`
+    const clearBefore = now - windowMs
 
-    // It counts requests in the last X seconds from now, not from the first request.
+    // Use a transaction (multi) to make operations atomic
+    const result = await redis
+      .multi() // Queue multiple commands. They execute together.
+      .zremrangebyscore(key, 0, clearBefore) // remove timestamps outside the current window
+      .zcard(key)                            // count elements inside the window
+      .exec();
 
-      //  Zadd - Adds current request to sorted set..
-     // zremrangebyscore - Deletes requests older than the window..
-     // zcard - Gets the current count of requests in the window..
+    // Redis returns => [ [null, removedCount], [null, currentCount] ]
+    const currentCount = result[1][1];
 
-    const result = await redis.eval(
-      `
-        local now = tonumber(ARGV [1])
-        local window_ms = tonumber(ARGV[2])
-        local member = ARGV[3]
-        local cutoff = now - window_ms
+    if (currentCount >= Number(limit)) {
+      const oldestTimestamp = await redis.zrange(key, 0, 0, 'WITHSCORES');
+      // It returns elements based on their position in the sorted set. [ZRANGE key start stop]
+      let retryAfter = Math.ceil(windowMs / 1000);
+      
+      if (oldestTimestamp && oldestTimestamp.length > 0) {
+        const oldestTime = parseInt(oldestTimestamp[1], 10);
+        retryAfter = Math.ceil((oldestTime + windowMs - now) / 1000);
+      }
+      
+      retryAfter = retryAfter > 0 ? retryAfter : 1;
 
-        redis.call('zadd', KEYS[1], now, member)
-        redis.call('zremrangebyscore', KEYS[1], '-inf', cutoff)
+      return {
+        allowed: false,
+        count: currentCount,
+        remaining: 0,
+        ttl: retryAfter,
+      }
+    }
 
-        local current = redis.call('zcard', KEYS[1])
-        local oldest = redis.call('zrange', KEYS[1], 0, 0, 'WITHSCORES')
-        local ttl = 0
+    // Add current request timestamp to the sorted set and set expiration
+    await redis
+      .multi()
+      .zadd(key, now, `${now}-${Math.random().toString(36).slice(2, 10)}`)
+      .expire(key, Math.ceil(windowMs / 1000))
+      .exec();
 
-        if #oldest > 0 then
-          local oldest_score = tonumber(oldest[2])
-          ttl = math.max(0, math.ceil((oldest_score + window_ms - now) / 1000))
-        end
-
-        redis.call('expire', KEYS[1], tonumber(ARGV[4]))
-
-        return { current, ttl }
-      `,
-      1,
-      key,
-      now,
-      windowMs,
-      member,
-      windowSeconds,
-    )
-
-    const [currentCount, ttl] = Array.isArray(result) ? result : [result?.[0], result?.[1]]
-    const nextCount = Number(currentCount || 0)
-    const nextTtl = Number(ttl || 0)
+    const nextCount = currentCount + 1;
 
     return {
-      allowed: nextCount <= Number(limit),
+      allowed: true,
       count: nextCount,
       remaining: Math.max(0, Number(limit) - nextCount),
-      ttl: Math.max(nextTtl, 0),
+      ttl: 0,
     }
   })
 }
 
-// THESE 4 => used for ✅ last seen tracking ✅ active session management..
-
-export const touchSession = async (userId) => {
-  if (!userId) return false
-
-  return withRedis(async () => {
-    const key = `session:${userId}` // Like heartbeat refresh... Update activity timestamp.
-    await redis.hset(key, 'lastSeen', new Date().toISOString())
-    await redis.expire(key, SESSION_TTL)
-    return true
-  })
-}
+// THESE 3 => used for ✅ last seen tracking ✅ active session management..
+// If key expires.... MONGO DB is for truth..
 
 export const setSession = async (userId, payload = {}) => {
   if (!userId) return false
-
+  // // hset Handles the different tabs..
   return withRedis(async () => {
     const key = `session:${userId}`
     await redis.hset(key, {
@@ -112,7 +99,8 @@ export const setSession = async (userId, payload = {}) => {
 
 export const getSession = async (userId) => {
   if (!userId) return null
-
+  // inside the broadcastPresenceUpdate function, and inside userController.js when someone fetches a user's profile.
+  // When User A visits User B's profile, the Node server needs to know when User B was last seen. Instead of instantly doing a slow query on MongoDB, the server runs getSession(userId)
   return withRedis(async () => {
     const data = await redis.hgetall(`session:${userId}`)
     return Object.keys(data || {}).length ? data : null
@@ -121,7 +109,8 @@ export const getSession = async (userId) => {
 
 export const deleteSession = async (userId) => {
   if (!userId) return false
-
+  //  user explicitly logs out of the app, or if they permanently delete their account. 
+  // We never call this in the codebase..
   return withRedis(async () => {
     await redis.del(`session:${userId}`)
     return true
@@ -133,12 +122,18 @@ const ONLINE_SOCKET_TTL = 24 * 60 * 60 // 24 hours
 
 export const registerOnlineUser = async (userId, socketId) => {
   if (!userId) return false
-
+  // I originally put a 24-hour TTL on my active socket tracking in Redis to prevent memory leaks in case of a server crash.
+  // I realized this creates a bug for power users who leave the app open for more than a day
   return withRedis(async () => {
     const key = `online:users`
-    await redis.sadd(key, userId)
+    await redis.sadd(key, userId)  // SADD stores only unique elements.
+    // May be used in the future...
+    // Key: online:users { user1, user2, user3} 
+    // To display easily how many online users in this appication(O(1)) But hset => O(N)...
+    
     await redis.hset(`online:socket:${userId}`, socketId, Date.now().toString()) 
     // Diff tabs..  user1 may be connected from: - Chrome tab - Mobile app - Another laptop...
+    // Run KEYS online:socket:* to find every single hash in the entire database. (This scans your entire database and is O(N) extremely slow).  Count the results.
     await redis.expire(`online:socket:${userId}`, ONLINE_SOCKET_TTL)
     return true
   })
@@ -167,12 +162,21 @@ export const unregisterOnlineUser = async (userId, socketId) => {
 export const getOnlineUsers = async () => {
   return withRedis(async () => {
     const users = await redis.smembers('online:users')
+    // Already TAB 1,2 are deleted..
+    // Tab 3 runs hdel(socket3) -> deletes socket3.
+    //Tab 3 checks hlen(online:socket:UserA) -> sees 0 remaining sockets.
+    // Tab 3 is supposed to run srem('online:users', UserA).  (This why Source of truth requried..)
+    // Returns all users.. in online:users
     if (!users || users.length === 0) return []
 
     // Verify which users actually have active socket registrations
     const pipeline = redis.pipeline()
     users.forEach((userId) => {
       pipeline.exists(`online:socket:${userId}`)
+      // Check
+      //  To prevent "Ghost Users" (Fake Online Users).
+      // online:socket:${userId} is the Primary Source of Truth (the actual active sockets).
+      // online:users is just a Secondary Fast Index (the master list).
     })
     const results = await pipeline.exec()
 
@@ -191,6 +195,7 @@ export const getOnlineUsers = async () => {
     if (inactiveUsers.length > 0) {
       // Clean up stale users from 'online:users' in the background
       redis.srem('online:users', ...inactiveUsers).catch((err) => {
+      // If it finds any ghost users, it automatically deletes them from the online:users
         console.warn('[Redis] failed to remove stale online users:', err.message)
       })
     }
@@ -235,49 +240,6 @@ export const getOnlineCount = async () => {
   })
 }
 
-export const setTypingStatus = async (conversationKey, userId) => {
-  if (!conversationKey || !userId) return false
-
-  return withRedis(async () => {  // Advanced multi-chat cleanup → two directions useful
-  // Exactly which conversation is active for a user → "typing:active:userId" => conversationKey Extra cleanup → If user starts typing in another conversation, previous "typing:active:userId" will be overwritten, and previous "typing:conversationKey" will expire after TTL. This way we avoid stale typing indicators across multiple conversations.
-    await redis.set(`typing:${conversationKey}`, userId, 'EX', TYPING_TTL)
-    await redis.set(`typing:active:${userId}`, conversationKey, 'EX', TYPING_TTL)
-    return true
-  })
-}
-
-export const clearTypingStatus = async (conversationKey, userId) => {
-  if (!conversationKey && !userId) return false
-
-  return withRedis(async () => {
-    if (conversationKey) {
-      await redis.del(`typing:${conversationKey}`)
-    }
-
-    if (userId) {
-      await redis.del(`typing:active:${userId}`)
-    }
-
-    return true
-  })
-}
-
-export const getTypingStatus = async (conversationKey) => {
-  if (!conversationKey) return null
-
-  return withRedis(async () => {
-    return redis.get(`typing:${conversationKey}`)
-  })
-}
-
-
-export const getTypingConversationForUser = async (userId) => {
-  if (!userId) return null
-
-  return withRedis(async () => {
-    return redis.get(`typing:active:${userId}`)
-  })
-}
 
 export const setFeedCache = async (key, payload) => {
   return withRedis(async () => {
@@ -297,7 +259,7 @@ export const deleteFeedCache = async (key) => {
   return withRedis(async () => {
     await redis.del(key)  // Deletes one exact cache key...
     return true
-  })
+  })  
 }
 
 export const deleteFeedCacheForUser = async (userId) => {

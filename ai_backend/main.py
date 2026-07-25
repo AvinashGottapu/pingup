@@ -173,6 +173,7 @@ async def photo_magic_endpoint(
     request: Request,
     type: str = Form(...),
     image: UploadFile = File(...)
+    ## "UploadFile streams file uploads efficiently without loading the entire file into memory immediately."
 ):
     try:
         user_identifier = request.headers.get("x-user-id") or (request.client.host if request.client else "anonymous")    ## Redis-based rate limiting..
@@ -188,6 +189,7 @@ async def photo_magic_endpoint(
             )
 
         image_bytes = await image.read()
+        ## "Gemini expects the raw image bytes as input, so I read the uploaded file into memory."
 
         if not image_bytes:
             raise HTTPException(status_code=400, detail="Empty image file uploaded.")

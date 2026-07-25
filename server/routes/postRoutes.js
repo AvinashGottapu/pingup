@@ -5,7 +5,8 @@ import { addPost, getFeedPosts, likePost, addComment, likeComment, dislikeCommen
 
 const postRouter = express.Router()
 
-postRouter.post('/add',upload.array('images',4),protect,addPost)
+postRouter.post('/add',upload.array('images',4),protect,addPost) // You can upload up to 4 images.
+// morethan 5 images not allowed..
 postRouter.get('/feed',protect,getFeedPosts)
 postRouter.get('/:postId/comments',protect,getPostComments)
 postRouter.post('/like',protect,likePost)

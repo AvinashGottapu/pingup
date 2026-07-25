@@ -94,6 +94,7 @@ export const sendMessage = async (req, res) => {
           { width: '1280' },
         ],
       })
+      fs.unlinkSync(image.path) // 🧹 Clean up temp chat image file!
     }
 
     const message = await Message.create({

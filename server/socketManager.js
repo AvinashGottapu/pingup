@@ -1,19 +1,14 @@
 import { Server } from 'socket.io'
-import { createAdapter } from '@socket.io/redis-adapter'
 import { verifyToken } from '@clerk/backend'
 import User from './models/User.js'
 import Message from './models/Message.js'
-import { redis, redisSubscriber } from './configs/redis.js'
+import { redis } from './configs/redis.js'
 import {
-  clearTypingStatus,
   getOnlineUsers,
   getSession,
-  getTypingConversationForUser,
   incrementCounter,
   registerOnlineUser,
   setSession,
-  setTypingStatus,
-  touchSession,
   unregisterOnlineUser,
 } from './utils/redisStore.js'
 
@@ -23,28 +18,26 @@ const allowedOrigins = [
 ]
 
 let io
-let redisAdapter = null
+let isRedisConnected = false
 
-const getConversationKey = (userA, userB) => [userA, userB].sort().join(':')
-
-const initRedisAdapter = async () => {
-  if (redisAdapter) return redisAdapter;
+const initRedisClient = async () => {
+  if (isRedisConnected) return;
 
   try {
-    await Promise.race([
-      Promise.all([
-        redis.connect(),
-        redisSubscriber.connect()
-      ]),
+    // Promise.race() allows us to enforce a connection timeout. If Redis becomes unreachable or hangs during connection, the application can fail fast instead of waiting indefinitely..
+    await Promise.race([ // 2 promise's given.. Whichever promise finishes first wins.
+      redis.connect(),
       new Promise((_, reject) =>
         setTimeout(
           () => reject(new Error('Redis connection timeout')),
-          5000 // Increased timeout
+          5000
         )
       ),
     ]);
 
+    // TCP Connected doesn't always mean Redis Ready..
     const ping = await redis.ping();
+    // PING verifies the server is alive and able to process commands.
 
     if (ping !== 'PONG') {
       throw new Error('Redis ping failed');
@@ -52,36 +45,26 @@ const initRedisAdapter = async () => {
 
     // Clear stale online keys on startup
     await redis.del('online:users');
+    // Suppose yesterday Node.js crashed. Redis still contains (Users). Those are stale entries.
 
     const keys = await redis.keys('online:socket:*');
     if (keys.length > 0) {
       await redis.del(...keys);
     }
 
-    redisAdapter = createAdapter(redis, redisSubscriber);
-
+    isRedisConnected = true;
     console.log('[Redis] Connected successfully');
-
-    return redisAdapter;
   } catch (error) {
     console.warn(
-      '[Redis] unavailable, using in-memory socket adapter:',
+      '[Redis] unavailable, running without Redis caching:',
       error.message
     );
 
     try {
-      if (redis?.isOpen) {
-        await redis.quit();
+      if (redis?.isOpen) { // "Is the Redis socket connection currently open or hanging(Partially open)?"
+        await redis.quit(); // By calling redis.quit(), your backend says: "Redis is unavailable right now
       }
     } catch (e) {}
-
-    try {
-      if (redisSubscriber?.isOpen) {
-        await redisSubscriber.quit();
-      }
-    } catch (e) {}
-
-    return null;
   }
 };
 
@@ -104,15 +87,15 @@ const broadcastPresenceUpdate = async (userId, isOnline) => {
   })
 }
 
+
 export const initSocketServer = async (httpServer) => {
-  const adapter = await initRedisAdapter()
+  await initRedisClient()
 
   io = new Server(httpServer, {
     cors: {
       origin: allowedOrigins,
       credentials: true,
     },
-    adapter,
   })
 
   io.use(async (socket, next) => {
@@ -137,7 +120,7 @@ export const initSocketServer = async (httpServer) => {
       }
 
       socket.userId = data.sub
-      await touchSession(socket.userId)
+      await setSession(socket.userId, {})
       next()
     } catch (error) {
       next(new Error('Unauthorized'))
@@ -154,25 +137,16 @@ export const initSocketServer = async (httpServer) => {
     socket.on('typing:start', async ({ to_user_id }) => {
       if (!to_user_id) return
 
-      const conversationKey = getConversationKey(socket.userId, to_user_id)
-      await setTypingStatus(conversationKey, socket.userId)
-
       emitToUser(to_user_id, 'typing:start', {
         from_user_id: socket.userId,
-        conversationKey,
       })
     })
 
     socket.on('typing:stop', async ({ to_user_id }) => {
       if (!to_user_id) return
 
-      const conversationKey = getConversationKey(socket.userId, to_user_id)
-      await clearTypingStatus(conversationKey, socket.userId)
-
-      
       emitToUser(to_user_id, 'typing:stop', {
         from_user_id: socket.userId,
-        conversationKey,
       })
     })
 
@@ -195,15 +169,18 @@ export const initSocketServer = async (httpServer) => {
 
     socket.on('call:invite', ({ to_user_id, roomId, callerName }, ack) => {
       if (!to_user_id || !roomId || !callerName) {
+        //   1️⃣ Payload Validation
         ack?.({ success: false, message: 'Invalid call payload' })
         return
       }
 
-      if (!isUserOnline(to_user_id)) {
+        // 2️⃣ Online Presence Check
+      if(!isUserOnline(to_user_id)) {
         ack?.({ success: false, message: 'User is not available' })
         return
       }
 
+      // 3️⃣ Real-Time Push: Relay incoming call event to User B's private socket channel
       emitToUser(to_user_id, 'call:incoming', {
         type: 'call',
         roomId,
@@ -211,7 +188,7 @@ export const initSocketServer = async (httpServer) => {
         from_user_id: socket.userId,
       })
 
-      ack?.({ success: true })
+      ack?.({ success: true }) // 4️⃣ Return success acknowledgment back to User A
     })
 
     socket.on('call:reject', ({ to_user_id }, ack) => {
@@ -322,11 +299,6 @@ export const initSocketServer = async (httpServer) => {
       const lastSeenIso = new Date().toISOString()
       await setSession(socket.userId, { lastSeen: lastSeenIso })
       await User.findByIdAndUpdate(socket.userId, { lastSeen: lastSeenIso }).catch(() => {})
-
-      const activeConversation = await getTypingConversationForUser(socket.userId)
-      if (activeConversation) {
-        await clearTypingStatus(activeConversation, socket.userId)
-      }
 
       await broadcastPresenceUpdate(socket.userId, false)
     })

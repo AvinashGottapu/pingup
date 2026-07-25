@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { useAuth } from "@clerk/clerk-react";
-import { PhoneOff, Mic, MicOff, Volume2, VolumeX, Loader2, Minus, Monitor, MonitorOff, Palette } from "lucide-react";
+import { PhoneOff, Mic, MicOff, Volume2, VolumeX, Loader2, Minus, Palette } from "lucide-react";
 import { createSocket } from "../api/socket";
 import { toast } from "react-hot-toast";
 import { setIsMinimized } from "../features/user/userSlice";
@@ -23,8 +22,6 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [callStatus, setCallStatus] = useState("connecting"); // connecting, active, ended
   const [callDuration, setCallDuration] = useState(0);
-  const [isSharingScreen, setIsSharingScreen] = useState(false);
-  const [isRemoteVideoActive, setIsRemoteVideoActive] = useState(false);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
 
   // WebRTC & Socket Refs
@@ -32,11 +29,6 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
   const peerConnectionRef = useRef(null);
   const socketRef = useRef(null);
   const remoteAudioRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const screenStreamRef = useRef(null);
-  const videoSenderRef = useRef(null);
-  const isNegotiatingRef = useRef(false);
-  const isLocalTrackChangeRef = useRef(false);
   const whiteboardHistoryRef = useRef([]);
 
   // Format call duration to MM:SS
@@ -67,12 +59,6 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
   const teardownCall = () => {
     // Reset whiteboard history
     whiteboardHistoryRef.current = [];
-
-    // Stop all tracks of the local screen sharing stream if active
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-    }
 
     // 1. Stop all tracks of the local microphone stream
     if (localStreamRef.current) {
@@ -130,36 +116,6 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
           pc.addTrack(track, stream);
         });
 
-        // Handle WebRTC renegotiation when screen share video tracks are dynamically added/removed
-        pc.onnegotiationneeded = async () => {
-          if (!isLocalTrackChangeRef.current) {
-            console.log("[WebRTC] Skipping negotiation because there was no local track change initiated by us.");
-            return;
-          }
-          if (isNegotiatingRef.current) {
-            console.log("[WebRTC] Negotiation already in progress, skipping.");
-            return;
-          }
-          try {
-            isNegotiatingRef.current = true;
-            console.log("[WebRTC] Creating renegotiation offer...");
-            const offer = await pc.createOffer();
-            console.log("[WebRTC] Setting local description (offer)...");
-            await pc.setLocalDescription(offer);
-            console.log("[WebRTC] Emitting renegotiation offer signal...");
-            socket.emit("call:signal", {
-              roomId,
-              signal: { type: "offer", sdp: offer },
-            });
-          } catch (err) {
-            console.error("[WebRTC] Negotiation offer error:", err);
-            isNegotiatingRef.current = false;
-          } finally {
-            console.log("[WebRTC] Resetting isLocalTrackChangeRef to false.");
-            isLocalTrackChangeRef.current = false;
-          }
-        };
-
         // Step 5: Gather ICE Candidates and send them to the peer via signaling server
         pc.onicecandidate = (event) => {
           if (event.candidate) {
@@ -170,28 +126,21 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
           }
         };
 
-        // Step 6: Capture incoming remote audio and video tracks
+        // Step 6: Capture incoming remote audio tracks
         pc.ontrack = (event) => {
           const remoteStream = event.streams[0];
           if (event.track.kind === "audio") {
             if (remoteAudioRef.current) {
               remoteAudioRef.current.srcObject = remoteStream;
             }
-          } else if (event.track.kind === "video") {
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = remoteStream;
-            }
-            setIsRemoteVideoActive(true);
           }
           setCallStatus("active");
         };
 
-        pc.onremovetrack = () => {
-          setIsRemoteVideoActive(false);
-        };
-
         // Step 7: Handle changes in connection state (e.g. peer leaves unexpectedly)
         pc.onconnectionstatechange = () => {
+          //  browser has a built-in C++ engine (libwebrtc)
+          // Automatically picks and certifies the best path. Fires pc.onconnectionstatechange = "connected".
           if (pc.connectionState === "connected") {
             setCallStatus("active");
           } else if (pc.connectionState === "failed") {
@@ -202,11 +151,10 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
         };
 
         // Step 8: Setup Signaling Socket Listeners
-        
+
         // A. Listener for when a remote user joins the room (Active offerer)
         socket.on("call:user-joined", async () => {
           try {
-            isNegotiatingRef.current = true;
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             
@@ -216,7 +164,6 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
             });
           } catch (err) {
             console.error("[WebRTC] Error creating initial offer:", err);
-            isNegotiatingRef.current = false;
           }
         });
 
@@ -226,7 +173,7 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
         // B. Listener to receive signaling payloads (SDP Offers/Answers & ICE candidates)
         socket.on("call:signal", async ({ signal }) => {
           console.log("[WebRTC] Received call:signal event. Type:", signal.type);
-          
+
           if (signal.type === "offer") {
             // Received SDP Offer: Set remote desc and reply with SDP Answer
             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
@@ -240,20 +187,19 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
 
             // Process any ICE candidates that were queued while setting remote description
             while (iceQueue.length > 0) {  
-              const candidate = iceQueue.shift();  // shift() removes the first element from the queue.
-              await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => 
+              const candidate = iceQueue.shift(); // shift() removes the first element from the queue.
+              await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) => 
                 console.error("[WebRTC] Error adding queued candidate:", err)
               );
             }
           } else if (signal.type === "answer") {
             // Received SDP Answer: Set remote desc to establish connection
             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-            isNegotiatingRef.current = false;
- 
+
             // Process any ICE candidates that were queued while setting remote description
             while (iceQueue.length > 0) {
               const candidate = iceQueue.shift();
-              await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => 
+              await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) => 
                 console.error("[WebRTC] Error adding queued candidate:", err)
               );
             }
@@ -264,9 +210,9 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
               const mLineIndex = candidateObj.sdpMLineIndex;
               const hasRemoteMLine = pc.remoteDescription &&
                                      pc.remoteDescription.sdp.split("m=").length - 1 > mLineIndex;
- 
+
               if (pc.remoteDescription && hasRemoteMLine) {
-                await pc.addIceCandidate(candidateObj).catch(err => 
+                await pc.addIceCandidate(candidateObj).catch((err) => 
                   console.error("[WebRTC] Error adding candidate directly:", err)
                 );
               } else {
@@ -330,69 +276,6 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
     }, 1000);
   };
 
-  // Screen Sharing functions
-  const startScreenShare = async () => {
-    console.log("[WebRTC] startScreenShare called. Call status:", callStatus);
-    if (callStatus !== "active") {
-      toast.error("Wait for the call to connect before sharing screen");
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false, // We keep the voice audio separate
-      });
-
-      screenStreamRef.current = stream;
-      const videoTrack = stream.getVideoTracks()[0];
-
-      if (peerConnectionRef.current) {
-        // Store the sender ref so we can remove it when stopped
-        isLocalTrackChangeRef.current = true;
-        videoSenderRef.current = peerConnectionRef.current.addTrack(videoTrack, stream);
-      } else {
-        console.warn("[WebRTC] peerConnectionRef.current is null!");
-      }
-
-      setIsSharingScreen(true);
-
-      // Handle user stopping stream via browser native UI bar
-      videoTrack.onended = () => {
-        stopScreenShare();
-      };
-    } catch (err) {
-      toast.error("Screen sharing cancelled or failed");
-    }
-  };
-
-  const stopScreenShare = () => {
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-    }
-
-    if (peerConnectionRef.current && videoSenderRef.current) {
-      try {
-        isLocalTrackChangeRef.current = true;
-        peerConnectionRef.current.removeTrack(videoSenderRef.current);
-      } catch (err) {
-        console.warn("[WebRTC] Error removing screen track:", err);
-      }
-      videoSenderRef.current = null;
-    }
-
-    setIsSharingScreen(false);
-  };
-
-  const toggleScreenShare = () => {
-    if (isSharingScreen) {
-      stopScreenShare();
-    } else {
-      startScreenShare();
-    }
-  };
-
   // Whiteboard functions
   const toggleWhiteboard = (openState) => {
     setIsWhiteboardOpen(openState);
@@ -412,60 +295,42 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
     }
   };
 
-  // Handler to toggle speaker output state (by muting remote audio player)
   const toggleSpeaker = () => {
     const nextSpeakerState = !isSpeakerOn;
     setIsSpeakerOn(nextSpeakerState);
-    if (remoteAudioRef.current) {
+    if(remoteAudioRef.current) {
       remoteAudioRef.current.muted = !nextSpeakerState;
     }
   };
 
   const handleMinimize = () => {
     dispatch(setIsMinimized(true));
-    navigate("/");
   };
 
-  const handleMaximize = () => {
+  const handleRestore = () => {
     dispatch(setIsMinimized(false));
-    navigate(`/room/${roomId}`);
   };
 
   return (
     <>
-      {/* Hidden audio element to stream and play remote peer voice */}
       <audio ref={remoteAudioRef} autoPlay />
 
       {isMinimized ? (
         <div 
-          onClick={handleMaximize}
-          className="fixed bottom-24 right-6 sm:bottom-8 sm:right-8 z-50 flex flex-col items-center cursor-pointer group"
+          onClick={handleRestore}
+          className="fixed bottom-6 right-6 z-50 bg-slate-900/90 backdrop-blur-xl border border-indigo-500/30 p-4 rounded-2xl shadow-2xl flex items-center gap-3 cursor-pointer hover:border-indigo-500 transition-all hover:scale-105"
         >
-          <div className="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 animate-pulse">
-            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-950">
-              <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
-                {currentUser?.full_name ? currentUser.full_name.slice(0, 2).toUpperCase() : "VC"}
-              </span>
-            </div>
-            {/* Status Dot */}
-            <span className="absolute bottom-0 right-0 flex h-4.5 w-4.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4.5 w-4.5 bg-emerald-500 border-2 border-slate-950 items-center justify-center">
-                {isMuted ? (
-                  <MicOff className="w-2 h-2 text-white" />
-                ) : (
-                  <Mic className="w-2 h-2 text-white" />
-                )}
-              </span>
-            </span>
+          <div className="relative">
+            <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute inset-0"></div>
+            <div className="w-3 h-3 bg-emerald-500 rounded-full relative"></div>
           </div>
-          {/* Hover label */}
-          <div className="absolute -top-10 scale-0 group-hover:scale-100 transition-all bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-lg border border-slate-800 shadow-xl whitespace-nowrap z-50">
-            {callStatus === "active" ? `Active Call (${formatTime(callDuration)})` : "Connecting..."}
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-slate-300">Voice Call</span>
+            <span className="text-xs text-emerald-400 font-mono font-bold">{formatTime(callDuration)}</span>
           </div>
         </div>
       ) : (
-        <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-between py-12 px-6 text-white overflow-hidden select-none z-50">
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-between p-6 sm:p-12 overflow-hidden select-none">
           
           {/* Collaborative Canvas Whiteboard */}
           {isWhiteboardOpen && (
@@ -477,100 +342,68 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
             />
           )}
 
-          {/* Remote Video Player for Screen Sharing */}
-          <div className={`absolute inset-0 w-full h-full z-0 flex items-center justify-center bg-black transition-opacity duration-300 ${isRemoteVideoActive ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className="w-full h-full object-contain"
-            />
-          </div>
-
           {/* Minimize Button */}
-          {!isRemoteVideoActive && !isSharingScreen && (
-            <button 
-              onClick={handleMinimize} 
-              className="absolute top-6 right-6 p-2.5 rounded-full bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer border border-slate-850 z-20 hover:scale-105 active:scale-95"
-              title="Minimize Call"
-            >
-              <Minus className="w-5 h-5" />
-            </button>
-          )}
-
-          {/* Top Floating Name/Time Card Overlay during screen share */}
-          {(isRemoteVideoActive || isSharingScreen) && (
-            <div className="z-10 bg-slate-900/80 backdrop-blur-md border border-slate-850 px-6 py-2.5 rounded-2xl shadow-2xl flex items-center gap-4">
-              <span className="text-sm font-semibold text-slate-300">
-                {currentUser?.full_name || "Voice Call"} {isSharingScreen && <span className="text-xs text-slate-500 font-normal ml-1">(Screen Sharing)</span>}
-              </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-700"></span>
-              <span className="text-sm text-emerald-400 font-bold font-mono tracking-wider animate-pulse">
-                {formatTime(callDuration)}
-              </span>
-            </div>
-          )}
+          <button 
+            onClick={handleMinimize} 
+            className="absolute top-6 right-6 p-2.5 rounded-full bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer border border-slate-850 z-20 hover:scale-105 active:scale-95"
+            title="Minimize Call"
+          >
+            <Minus className="w-5 h-5" />
+          </button>
 
           {/* Decorative Blur Backdrops */}
-          {!isRemoteVideoActive && !isSharingScreen && (
-            <>
-              <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-indigo-600/20 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
-              <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-pink-600/20 rounded-full blur-3xl animate-pulse pointer-events-none" style={{ animationDelay: "2s" }}></div>
-            </>
-          )}
+          <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-indigo-600/20 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-pink-600/20 rounded-full blur-3xl animate-pulse pointer-events-none" style={{ animationDelay: "2s" }}></div>
 
           {/* Profile & Pulse Animation */}
-          {!isRemoteVideoActive && !isSharingScreen && (
-            <div className="z-10 flex flex-col items-center justify-center my-auto relative w-full">
-              <div className="relative flex items-center justify-center">
-                {/* Pulsing rings */}
+          <div className="z-10 flex flex-col items-center justify-center my-auto relative w-full">
+            <div className="relative flex items-center justify-center">
+              {callStatus === "connecting" && (
+                <>
+                  <div className="absolute w-44 h-44 rounded-full border border-indigo-500/30 animate-ping duration-1000"></div>
+                  <div className="absolute w-56 h-56 rounded-full border border-purple-500/20 animate-ping duration-1500" style={{ animationDelay: "0.5s" }}></div>
+                </>
+              )}
+              {callStatus === "active" && (
+                <>
+                  <div className="absolute w-40 h-40 rounded-full bg-indigo-500/10 animate-pulse duration-1000"></div>
+                  <div className="absolute w-48 h-48 rounded-full border border-indigo-500/20 animate-pulse duration-2000"></div>
+                </>
+              )}
+
+              {/* Avatar frame */}
+              <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-2xl relative z-10">
+                <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-950">
+                  <span className="text-4xl font-extrabold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
+                    {currentUser?.full_name ? currentUser.full_name.slice(0, 2).toUpperCase() : "VC"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Status texts */}
+            <div className="mt-8 text-center min-h-[5rem]">
+              <h2 className="text-2xl font-black tracking-tight text-white">
+                {currentUser?.full_name || "Voice Call"}
+              </h2>
+              <div className="mt-2 flex items-center justify-center gap-2 text-sm text-slate-400 font-medium">
                 {callStatus === "connecting" && (
                   <>
-                    <div className="absolute w-44 h-44 rounded-full border border-indigo-500/30 animate-ping duration-1000"></div>
-                    <div className="absolute w-56 h-56 rounded-full border border-purple-500/20 animate-ping duration-1500" style={{ animationDelay: "0.5s" }}></div>
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <span>Connecting peer lines...</span>
                   </>
                 )}
                 {callStatus === "active" && (
-                  <>
-                    <div className="absolute w-40 h-40 rounded-full bg-indigo-500/10 animate-pulse duration-1000"></div>
-                    <div className="absolute w-48 h-48 rounded-full border border-indigo-500/20 animate-pulse duration-2000"></div>
-                  </>
+                  <span className="text-emerald-400 font-bold font-mono tracking-wider animate-pulse">
+                    {formatTime(callDuration)}
+                  </span>
                 )}
-
-                {/* Avatar frame */}
-                <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-2xl relative z-10">
-                  <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-950">
-                    <span className="text-4xl font-extrabold bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
-                      {currentUser?.full_name ? currentUser.full_name.slice(0, 2).toUpperCase() : "VC"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status texts */}
-              <div className="mt-8 text-center min-h-[5rem]">
-                <h2 className="text-2xl font-black tracking-tight text-white">
-                  {currentUser?.full_name || "Voice Call"}
-                </h2>
-                <div className="mt-2 flex items-center justify-center gap-2 text-sm text-slate-400 font-medium">
-                  {callStatus === "connecting" && (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                      <span>Connecting peer lines...</span>
-                    </>
-                  )}
-                  {callStatus === "active" && (
-                    <span className="text-emerald-400 font-bold font-mono tracking-wider animate-pulse">
-                      {formatTime(callDuration)}
-                    </span>
-                  )}
-                  {callStatus === "ended" && (
-                    <span className="text-rose-500 font-bold">Call Ended</span>
-                  )}
-                </div>
+                {callStatus === "ended" && (
+                  <span className="text-rose-500 font-bold">Call Ended</span>
+                )}
               </div>
             </div>
-          )}
+          </div>
 
           {/* Control Actions Bar */}
           <div className="z-10 w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-850 px-6 py-4 rounded-3xl flex justify-around items-center shadow-2xl">
@@ -596,53 +429,27 @@ const Roompage = ({ roomId: propRoomId, onClose }) => {
               <PhoneOff className="w-7 h-7" />
             </button>
 
-            {/* Screen Share button */}
-            {!isWhiteboardOpen && (
-              <button
-                onClick={toggleScreenShare}
-                disabled={callStatus !== "active"}
-                className={`p-4 rounded-2xl transition-all ${
-                  callStatus !== "active"
-                    ? "opacity-30 cursor-not-allowed bg-slate-800 text-slate-600"
-                    : isSharingScreen
-                    ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 cursor-pointer animate-pulse"
-                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                }`}
-                title={
-                  callStatus !== "active"
-                    ? "Connect call to share screen"
-                    : isSharingScreen
-                    ? "Stop Screen Share"
-                    : "Share Screen"
-                }
-              >
-                {isSharingScreen ? <MonitorOff className="w-6 h-6" /> : <Monitor className="w-6 h-6" />}
-              </button>
-            )}
-
             {/* Whiteboard button */}
-            {!isSharingScreen && !isRemoteVideoActive && (
-              <button
-                onClick={() => toggleWhiteboard(!isWhiteboardOpen)}
-                disabled={callStatus !== "active"}
-                className={`p-4 rounded-2xl transition-all ${
-                  callStatus !== "active"
-                    ? "opacity-30 cursor-not-allowed bg-slate-800 text-slate-600"
-                    : isWhiteboardOpen
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 cursor-pointer animate-pulse"
-                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                }`}
-                title={
-                  callStatus !== "active"
-                    ? "Connect call to open whiteboard"
-                    : isWhiteboardOpen
-                    ? "Close Whiteboard"
-                    : "Open Whiteboard"
-                }
-              >
-                <Palette className="w-6 h-6" />
-              </button>
-            )}
+            <button
+              onClick={() => toggleWhiteboard(!isWhiteboardOpen)}
+              disabled={callStatus !== "active"}
+              className={`p-4 rounded-2xl transition-all ${
+                callStatus !== "active"
+                  ? "opacity-30 cursor-not-allowed bg-slate-800 text-slate-600"
+                  : isWhiteboardOpen
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 cursor-pointer animate-pulse"
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+              }`}
+              title={
+                callStatus !== "active"
+                  ? "Connect call to open whiteboard"
+                  : isWhiteboardOpen
+                  ? "Close Whiteboard"
+                  : "Open Whiteboard"
+              }
+            >
+              <Palette className="w-6 h-6" />
+            </button>
 
             {/* Speaker button */}
             <button

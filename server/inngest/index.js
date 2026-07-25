@@ -12,6 +12,10 @@ export const inngest = new Inngest({ id: "pingup-app" });
 
 // Inngest function to save user data to database.
 const syncUserCreation = inngest.createFunction(
+    // If Inngest/Webhooks creates the user, why do we ALSO need User.create() inside getUserData?"
+    // Clerk's cloud servers cannot connect to http://localhost:5000.
+    // Webhooks NEVER fire on your laptop unless you set up Ngrok tunnels!
+
     {
         id: "sync-user-from-clerk",
         triggers: [{ event: "clerk/user.created" }],

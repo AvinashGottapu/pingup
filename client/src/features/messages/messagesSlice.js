@@ -45,7 +45,7 @@ const messagesSlice = createSlice({
         markMessagesAsSeen: (state, action) => {
             const readerId = action.payload.from_user_id
             state.messages = state.messages.map((msg) => {
-                if (msg.to_user_id === readerId) {
+                if (msg.to_user_id === readerId && !msg.seen) {
                     return { ...msg, seen: true }
                 }
                 return msg

@@ -29,7 +29,7 @@ const ChatBox = () => {
   // PingBuddy modal states
   const [showBuddyModal, setShowBuddyModal] = useState(false);
   const [buddyPrompt, setBuddyPrompt] = useState("");
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); 
   const [useAzure, setUseAzure] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -249,7 +249,7 @@ const ChatBox = () => {
 
         setPeerPresence((currentPresence) => ({
           ...currentPresence,
-          isOnline: onlineUsers.includes(userId),
+          isOnline: onlineUsers.includes(userId), // // 2️⃣ UPDATE only the isOnline boolean!
         }));
       };
 
@@ -264,6 +264,7 @@ const ChatBox = () => {
     setupTypingSocket();
 
     return () => {
+      // The function returned by useEffect is called the cleanup function.
       cancelled = true;
       clearTimeout(typingTimerRef.current);
 
@@ -272,7 +273,9 @@ const ChatBox = () => {
         socketRef.current.off("typing:stop");
         socketRef.current.off("presence:update");
       }
-
+      // typingActiveRef.current   Either True or False... 
+      // A ref is simply an object that stores a value without causing the component to re-render when that value changes.
+      // Ref Value is accessed through .current
       if (typingActiveRef.current) {
         socketRef.current?.emit("typing:stop", {
           to_user_id: userId,
@@ -302,15 +305,20 @@ const ChatBox = () => {
       if (!messageText && !image) return;
 
       if (messageText.includes('@buddy')) {
-        const regex = /@buddy\s*(.*)/i;
+        const regex = /@buddy\s*(.*)/i; // This creates a Regular Expression (Regex).
+        // "\s" => single space... (\s*) represents zero or more spaces.
+        // (.*) Match zero or more of any character.
+        // i => case-insensitive...
         const match = messageText.match(regex);
         const prompt = match && match[1] ? match[1].trim() : messageText.replace(/@buddy/g, '').trim();
+        // match[1] automatically extracts the clean AI prompt (everything after @buddy).
+
         setBuddyPrompt(prompt);
         setShowBuddyModal(true);
         setText("");
         return;
       }
-
+      
       emitTypingStatus(false);
       clearTimeout(typingTimerRef.current);
 
@@ -456,7 +464,7 @@ const ChatBox = () => {
                 ? "bg-slate-750 text-slate-500 cursor-not-allowed opacity-50 shadow-none" 
                 : "bg-gradient-to-r from-pink-500 to-blue-500 hover:from-pink-600 hover:to-blue-600 text-white hover:scale-105 cursor-pointer shadow-md shadow-pink-500/20"
             }`}
-            title={activeRoomId ? "You are already on a call" : "Start Audio/Video Call"}
+            title={activeRoomId ? "You are already on a call" : "Start Voice Call"}
           >
             <Phone className="w-4.5 h-4.5 stroke-[2.5]" />
           </button>

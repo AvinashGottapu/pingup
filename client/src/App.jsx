@@ -77,7 +77,7 @@ const App = () => {
       cancelled = true
       if (retryTimer) clearTimeout(retryTimer)
     }
-  }, [user, getToken, dispatch])
+  }, [user, getToken, dispatch]) // Token changes this hitss.
 
   useEffect(() => {
     pathnameRef.current = pathname
@@ -149,13 +149,16 @@ const App = () => {
 
     const handleIncomingCall = (payload) => {
       if (activeRoomIdRef.current) {
+        //   // If User B is ALREADY in another active room call, auto-reject the new call
         const socket = getSocket()
         if (socket) {
           socket.emit('call:reject', { to_user_id: payload.from_user_id })
         }
         return
       }
+      //  // Set incoming call data to show UI Modal
       setIncomingCall(payload)
+      //   // Play Ringtone Sound Effect
       audioRef.current.play().catch((error) => console.log('Audio play failed:', error))
     }
 
